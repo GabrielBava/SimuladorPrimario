@@ -207,10 +207,12 @@
     let e = usar && isNum(pctE) ? (pctE / 100) * base : 0;
     if (e > out.total) { e = out.total; out.limitado = true; }
     out.embutido = e;
-    // FGTS complementa o lance e reduz os recursos próprios (limitado ao que falta após o embutido)
+    // Recursos próprios = lance − embutido. O FGTS, quando usado, faz parte dos recursos próprios
+    // (limitado a eles); fica registrado à parte só para referência (out.fgts / out.dinheiro).
     const fv = num(l.fgtsValor);
-    out.fgts = usaFgts && isNum(fv) ? Math.min(Math.max(0, fv), out.total - e) : 0;
-    out.proprios = out.total - e - out.fgts;
+    out.proprios = out.total - e;
+    out.fgts = usaFgts && isNum(fv) ? Math.min(Math.max(0, fv), out.proprios) : 0;
+    out.dinheiro = out.proprios - out.fgts;
     return out;
   }
 
@@ -325,7 +327,7 @@
     res.proprios = lance ? lance.proprios : 0;
     res.fgts = lance && isNum(lance.fgts) ? lance.fgts : 0;
     res.lanceTotal = lance ? lance.total : 0;
-    res.totalAportado = isNum(res.totalParcelas) && isNum(res.proprios) ? res.totalParcelas + res.proprios + res.fgts : null;
+    res.totalAportado = isNum(res.totalParcelas) && isNum(res.proprios) ? res.totalParcelas + res.proprios : null;
     res.venda = isNum(res.credLiquido) ? (REGRAS.vendaPct / 100) * res.credLiquido : null;
     res.resultado = isNum(res.venda) && isNum(res.totalAportado) ? res.venda - res.totalAportado : null;
     res.rentabilidade = isNum(res.resultado) && res.totalAportado > 0 ? (res.resultado / res.totalAportado) * 100 : null;
@@ -640,7 +642,7 @@
     if (!n.ok || !isNum(n.totalPlano) || !isNum(n.credLiquido) || !isNum(n.proprios)) return out;
     const fluxos = [0];
     n.linhas.forEach((l) => fluxos.push(-(l.total || 0)));
-    fluxos[n.mesC] += n.credLiquido - n.proprios - n.fgts;
+    fluxos[n.mesC] += n.credLiquido - n.proprios;
     const i = tirMensal(fluxos);
     out.ok = true;
     out.mesC = n.mesC;
@@ -649,7 +651,7 @@
     out.fgts = n.fgts;
     out.totalParcelas = n.totalPlano;
     out.prazoEfetivo = n.mesC + n.prazoRestante;
-    out.desembolso = n.totalPlano + n.proprios + n.fgts;
+    out.desembolso = n.totalPlano + n.proprios;
     out.custo = out.desembolso - n.credLiquido;
     out.custoPct = n.credLiquido > 0 ? (out.custo / n.credLiquido) * 100 : null;
     out.cetMes = isNum(i) ? i * 100 : null;

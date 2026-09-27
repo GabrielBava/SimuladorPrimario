@@ -489,7 +489,6 @@
     h += '<div class="forma-dados' + (oculto ? ' borrado' : '') + '"' + (oculto ? ' aria-hidden="true"' : '') + '>';
     h += linha('Crédito contratado', v(base), 'forte');
     h += linha('Lance embutido', pct(n.embutido) + v(n.embutido));
-    if (s.lances.fgtsAtivo) h += linha('FGTS', pct(n.fgts) + v(n.fgts));
     h += linha('Lance recursos próprios', pct(n.proprios) + v(n.proprios));
     h += linha('Crédito disponível', v(n.credLiquido), 'realce');
     h += linha('Prazo remanescente', n.prazoRestante + ' meses');
@@ -605,7 +604,7 @@
       '<footer class="pdf-rodape"><span>' + esc(s.plano.lead) + '</span><span>' + n + ' / ' + total + '</span></footer></section>';
   }
 
-  function pdfCartaoForma(n, mod, comFgts) {
+  function pdfCartaoForma(n, mod) {
     const v = (x) => (C.isNum(x) ? C.fmtBRL(x) : '—');
     const base = n.credBruto;
     const pct = (x) => (C.isNum(x) && C.isNum(base) && base > 0 ? '(' + C.fmtNum((x / base) * 100, 0) + '%) ' : '');
@@ -614,7 +613,7 @@
     return h + pdfLinhas([
       ['Crédito contratado', v(base), 'forte'],
       ['Lance embutido', pct(n.embutido) + v(n.embutido)],
-    ].concat(comFgts ? [['FGTS', pct(n.fgts) + v(n.fgts)]] : []).concat([
+    ].concat([
       ['Recursos próprios', pct(n.proprios) + v(n.proprios)],
       ['Crédito disponível', v(n.credLiquido), 'realce'],
       ['Prazo remanescente', n.prazoRestante + ' meses'],
@@ -651,7 +650,7 @@
     ];
     p1 += '<div class="pdf-bloco">' + pdfTitulo('Características do', 'Plano') + '<dl class="pdf-carac">' + carac.map(([k, v]) => '<div><dt>' + k + '</dt><dd>' + esc(v) + '</dd></div>').join('') + '</dl></div>';
     const mods1 = ['sorteio', 'embutido', 'fixo'].filter((m) => nucleo(m));
-    p1 += '<div class="pdf-bloco">' + pdfTitulo('Formas de', 'Contemplação') + '<div class="pdf-grade c' + mods1.length + '">' + mods1.map((m) => pdfCartaoForma(nucleo(m), m, s.lances.fgtsAtivo)).join('') + '</div></div>';
+    p1 += '<div class="pdf-bloco">' + pdfTitulo('Formas de', 'Contemplação') + '<div class="pdf-grade c' + mods1.length + '">' + mods1.map((m) => pdfCartaoForma(nucleo(m), m)).join('') + '</div></div>';
 
     // Página 2: panorama de venda e alavancagem
     const f = (x) => (C.isNum(x) ? C.fmtBRL(x) : '—');

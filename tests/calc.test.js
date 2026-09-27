@@ -212,17 +212,21 @@ test('categoria aplica os valores fixos do plano', () => {
   assert.deepEqual([p.credito, p.prazo, p.taxaAdm, p.fundoReserva, p.indice], [200000, 240, 20, 2, 'incc']);
 });
 
-test('FGTS complementa o lance fixo e reduz os recursos próprios', () => {
+test('FGTS entra nos recursos próprios e o lance total recalcula as parcelas', () => {
   const s = base();
-  Object.assign(s.lances, { embutidoAtivo: true, fixoAtivo: true, fixoUsarEmbutido: true, fgtsAtivo: true, fgtsValor: 10000, fixoUsarFgts: true });
+  Object.assign(s.lances, { embutidoAtivo: true, fixoAtivo: true, fixoUsarEmbutido: true });
+  const sem = Calc.nucleo(s, 'fixo');
+  Object.assign(s.lances, { fgtsAtivo: true, fgtsValor: 10000, fixoUsarFgts: true });
   const n = Calc.nucleo(s, 'fixo');
   near(n.lance.total, 50000);
   near(n.embutido, 25000);
+  near(n.proprios, 25000, 'recursos próprios incluem o FGTS');
   near(n.fgts, 10000);
-  near(n.proprios, 15000);
-  near(n.totalAportado, 14640 + 15000 + 10000, 'FGTS conta como aporte do cliente');
+  near(n.lance.dinheiro, 15000);
+  near(n.totalAportado, 14640 + 25000, 'FGTS não é contado duas vezes');
+  // o lance total (embutido + próprios com FGTS) é o que abate o saldo
+  near(n.linhas[12].total, sem.linhas[12].total);
+  near(n.saldoDevedor, 88 * 1220 - 50000);
   s.lances.fgtsValor = 90000;
-  near(Calc.nucleo(s, 'fixo').fgts, 25000, 'FGTS limitado ao que falta após o embutido');
-  s.lances.fixoUsarFgts = false;
-  near(Calc.nucleo(s, 'fixo').fgts, 0);
+  near(Calc.nucleo(s, 'fixo').fgts, 25000, 'FGTS limitado aos recursos próprios');
 });

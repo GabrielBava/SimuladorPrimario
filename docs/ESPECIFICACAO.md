@@ -148,7 +148,7 @@ Cada cartão de lance lembra onde o lance é abatido (parcela ou prazo). No sort
 - **Contato do cliente (WhatsApp):** campo obrigatório, com o mesmo destaque do nome e máscara (11) 98765-4321. Nome e contato são exigidos para gerar a proposta. A prévia tem o botão **Abrir conversa no WhatsApp** (link `wa.me` para o cliente, com mensagem pronta); o PDF salvo é anexado na conversa.
 - **WhatsApp do especialista:** sai do menu e passa a ser configurado em `js/config.js` (`whatsappEspecialista`), usado no botão da página 3 do PDF.
 - **Abatimento do lance:** opções "Parcela" e "Prazo", com descrição abaixo do campo.
-- **Estratégia de Lance** (antes "Estratégias de Contemplação"), com títulos em maiúsculas. Campo **FGTS** no início (valor em R$); "Usar FGTS" no Lance Fixo e no Lance Livre. O FGTS complementa o lance, limitado ao que falta após o embutido: recursos próprios = lance − embutido − FGTS. O FGTS conta como aporte do cliente.
+- **Estratégia de Lance** (antes "Estratégias de Contemplação"), com títulos em maiúsculas. Campo **FGTS** no início (valor em R$); "Usar FGTS" no Lance Fixo e no Lance Livre. O FGTS faz parte dos recursos próprios, sem linha própria: recursos próprios = lance − embutido (com o FGTS incluído, limitado a esse valor). O lance total (embutido + recursos próprios) abate o saldo e recalcula as parcelas por parcela ou por prazo, e os recursos próprios entram no aporte uma única vez.
 - **Características do Plano:** projeção de contemplação só com o número (ex.: 12); abatimento "Parcela" ou "Prazo".
 - **Alavancagem:** meses 1 a 12 e depois 18, 24, 30, 36, 42 e 48. Rentabilidade ao mês = (Vl. venda ÷ Aporte)^(1/mês) − 1.
 - **Aquisição:** cenários de Sorteio e Lance Embutido.
