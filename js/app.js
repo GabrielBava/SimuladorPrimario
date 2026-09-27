@@ -490,7 +490,7 @@
       ['Adesão', p.adesaoAtiva ? 'Sim (' + C.fmtPct(C.num(p.adesaoPct)) + ' em ' + (p.adesaoMeses || '—') + ' meses)' : 'Não'],
       ['Projeção de contemplação', 'Mês ' + (p.mesContemplacao || '—')]
     ];
-    return '<section class="bloco-res vitrine">' + tituloSecao('Resumo da', 'Proposta') + '<div class="kpis">' +
+    return '<section class="bloco-res vitrine">' + tituloSecao('Resumo da', 'Proposta', 'Visão geral') + '<div class="kpis">' +
       destaque('Crédito', R.credito, 'brl', esc(C.CATEGORIAS[p.categoria].nome)) +
       destaque('Parcela inicial', R.parcelaInicial, 'brl', s.parcela.modalidade !== 'integral' ? 'com redutor de ' + C.fmtPct(r.redutorPct, 0) : '') +
       simples('Taxa ao ano', R.taxaAno, 'pct', 'administração') +
@@ -498,8 +498,8 @@
       '</div><dl class="lista-info">' + lista.map(([k, v]) => '<div><dt>' + k + '</dt><dd>' + esc(v) + '</dd></div>').join('') + '</dl></section>';
   }
 
-  function tituloSecao(a, b) {
-    return '<h2 class="titulo-vitrine">' + esc(a) + ' <span class="acento">' + esc(b) + '</span></h2>';
+  function tituloSecao(a, b, eyebrow) {
+    return (eyebrow ? '<p class="eyebrow">' + esc(eyebrow) + '</p>' : '') + '<h2 class="titulo-vitrine">' + (a ? esc(a) + ' ' : '') + '<span class="acento">' + esc(b) + '</span></h2>';
   }
 
   function tabelaResumoGeral(s, r, pdf) {
@@ -550,7 +550,7 @@
 
   function secFormas(s, r) {
     const mesC = C.num(s.plano.mesContemplacao);
-    return '<section class="bloco-res vitrine">' + tituloSecao('Formas de', 'Contemplação') +
+    return '<section class="bloco-res vitrine">' + tituloSecao('Formas de', 'Contemplação', 'Comparativo') +
       '<p class="g-sub">Comparação na contemplação projetada no mês ' + (mesC || '—') + '. Valores a preços do mês da contemplação.</p>' +
       '<div class="formas">' + r.cenarios.map((c) => cartaoForma(s, c)).join('') + '</div>' +
       '<p class="aviso-inline">' + esc(C.MSG.mesHipotetico) + ' Nenhum lance assegura contemplação.</p></section>';
@@ -566,7 +566,7 @@
 
   function secAlavancagem(r) {
     if (!r.alavancagem.length) return '';
-    return '<section class="bloco-res vitrine">' + tituloSecao('Simulação de', 'Alavancagem') +
+    return '<section class="bloco-res vitrine">' + tituloSecao('Simulação de', 'Alavancagem', 'Cenários de venda') +
       '<p class="g-sub">Se a carta for contemplada no mês indicado e vendida por ' + C.REGRAS.vendaPct + '% do crédito disponível. Aporte = parcelas pagas até o mês. Rentabilidade = lucro ÷ aporte.</p>' +
       r.alavancagem.map(tabelaAlavancagem).join('') +
       '<p class="aviso-inline">Cenários hipotéticos: não há garantia de contemplação, venda ou lucro.</p></section>';
@@ -616,14 +616,14 @@
     const s = estado;
     graficos.clear();
     let h = '<header class="topo"><div class="topo-linha"><button type="button" class="botao-menu" data-acao-menu aria-controls="sidebar">' + (document.body.classList.contains('menu-oculto') ? 'Mostrar menu' : 'Ocultar menu') + '</button>' +
-      '<div><h1>' + (s.plano.lead ? esc(s.plano.lead) : 'Simulação de consórcio') + '</h1>' +
+      '<div><p class="eyebrow">Proposta de consórcio</p><h1>' + (s.plano.lead ? esc(s.plano.lead) : 'Simulação de consórcio') + '</h1>' +
       '<p class="sub-topo">' + esc(C.CATEGORIAS[s.plano.categoria].nome) + (s.plano.administradora ? ' · ' + esc(s.plano.administradora) : '') + '</p></div></div></header>';
     h += secAlertas(r);
     h += secResumo(s, r);
     h += secFormas(s, r);
     h += secAlavancagem(r);
     const proj = secProjecoes(r, false);
-    if (proj) h += '<section class="bloco-res vitrine">' + tituloSecao('', 'Projeções') + proj + '</section>';
+    if (proj) h += '<section class="bloco-res vitrine">' + tituloSecao('Cenários', 'futuros', 'Projeções') + proj + '</section>';
     h += '<section class="bloco-res"><details class="memo-sec" data-id="detalhes"' + (abertos.has('detalhes') ? ' open' : '') + '><summary><h2>Detalhes do cálculo e premissas</h2></summary>' +
       '<h3>Condições do plano</h3>' + tabelaResumoGeral(s, r, false) +
       '<h3>Premissas usadas</h3><ul class="premissas">' + r.premissas.map((p) => '<li>' + esc(p) + '</li>').join('') + '</ul>' +
@@ -652,12 +652,12 @@
   function montarProposta(s, r, lead) {
     const data = new Date().toLocaleDateString('pt-BR');
     const ident = [C.CATEGORIAS[s.plano.categoria].nome, s.plano.administradora && 'Administradora: ' + esc(s.plano.administradora)].filter(Boolean).join(' · ');
-    let h = '<header class="p-topo"><h1>Proposta de consórcio</h1><p><b>Cliente:</b> ' + esc(lead) + '</p><p><b>Data de emissão:</b> ' + data + ' · ' + ident + '</p></header>';
+    let h = '<header class="p-topo"><p class="eyebrow">Proposta de consórcio</p><h1>' + esc(lead) + '</h1><p>' + ident + ' · Emitida em ' + data + '</p></header>';
     h += secResumo(s, r, true);
     h += secFormas(s, r);
     h += secAlavancagem(r);
     const proj = secProjecoes(r, true);
-    if (proj) h += '<section class="bloco-res vitrine">' + tituloSecao('', 'Projeções') + proj + '</section>';
+    if (proj) h += '<section class="bloco-res vitrine">' + tituloSecao('Cenários', 'futuros', 'Projeções') + proj + '</section>';
     h += '<section class="bloco-res"><h2>Premissas utilizadas</h2><ul>' + r.premissas.map((p) => '<li>' + esc(p) + '</li>').join('') + '</ul></section>';
     h += '<footer class="p-rodape"><p>' + esc(AVISO) + '</p></footer>';
     return { html: h, data };

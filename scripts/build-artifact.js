@@ -9,11 +9,13 @@ const ler = (f) => fs.readFileSync(path.join(raiz, f), 'utf8');
 
 const html = ler('index.html');
 const titulo = html.match(/<title>[\s\S]*?<\/title>/)[0];
+const fontes = (html.match(/<link[^>]*fonts\.g[^>]*>/g) || []).join('\n');
 const corpo = html.slice(html.indexOf('<body>') + 6, html.indexOf('<script src="js/calc.js">')).trim();
 const semEntidade = (js) => js.replace(/<\/script/gi, '<\\/script');
 
 const saida = [
   titulo,
+  fontes,
   '<style>\n' + ler('css/style.css') + '\n</style>',
   corpo,
   '<script>window.MODO_ARTIFACT = true;</script>',
