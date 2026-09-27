@@ -31,10 +31,19 @@
     outro: { nome: 'Outro índice' }
   };
 
+  // Ao selecionar a categoria, estes valores são aplicados ao plano (e podem ser editados depois).
   const CATEGORIAS = {
-    imovel: { nome: 'Imóvel', indice: 'incc' },
-    veiculo: { nome: 'Veículo', indice: 'ipca' }
+    imovel: { nome: 'Imóvel', indice: 'incc', credito: 200000, prazo: 240, taxaAdm: 20, fundoReserva: 2 },
+    veiculo: { nome: 'Veículo', indice: 'ipca', credito: 80000, prazo: 100, taxaAdm: 13, fundoReserva: 2 }
   };
+
+  /** Aplica ao plano os valores fixos da categoria. */
+  function aplicarCategoria(plano, categoria) {
+    const c = CATEGORIAS[categoria];
+    if (!c) return plano;
+    Object.assign(plano, { categoria, indice: c.indice, credito: c.credito, prazo: c.prazo, taxaAdm: c.taxaAdm, fundoReserva: c.fundoReserva });
+    return plano;
+  }
 
   const ADMINISTRADORAS = ['HS', 'Embracon', 'CNP', 'Itaú', 'Porto Seguro', 'Servopa', 'Banco do Brasil', 'Santander', 'Klubi'];
 
@@ -69,11 +78,11 @@
         lead: '',
         categoria: 'imovel',
         administradora: '',
-        credito: null,
-        prazo: 240,
+        credito: CATEGORIAS.imovel.credito,
+        prazo: CATEGORIAS.imovel.prazo,
         mesContemplacao: 12,
-        taxaAdm: null,
-        fundoReserva: null,
+        taxaAdm: CATEGORIAS.imovel.taxaAdm,
+        fundoReserva: CATEGORIAS.imovel.fundoReserva,
         adesaoAtiva: false,
         adesaoPct: null,
         adesaoMeses: null,
@@ -86,17 +95,21 @@
       },
       parcela: { modalidade: 'integral', redutorOutro: null },
       lances: {
+        fgtsAtivo: false,
+        fgtsValor: null,
         embutidoAtivo: true,
         embutidoPct: REGRAS.embutidoPctPadrao,
         fixoAtivo: true,
         fixoPct: REGRAS.fixoPctPadrao,
         fixoUsarEmbutido: true,
+        fixoUsarFgts: false,
         livreAtivo: false,
         livrePct: null,
-        livreUsarEmbutido: false
+        livreUsarEmbutido: false,
+        livreUsarFgts: false
       },
       projecoes: { parcelas: false, credito: false, rentabilidade: false },
-      contato: { whatsapp: '' }
+      contato: { cliente: '' } // WhatsApp do cliente que recebe a proposta
     };
   }
 
@@ -187,13 +200,17 @@
     const pctE = num(l.embutidoPct);
     const pct = mod === 'embutido' ? pctE : num(mod === 'fixo' ? l.fixoPct : l.livrePct);
     const usar = mod === 'embutido' || ((mod === 'fixo' ? l.fixoUsarEmbutido : l.livreUsarEmbutido) && l.embutidoAtivo);
-    const out = { pct, pctEmbutido: usar ? pctE : 0, usaEmbutido: usar, total: null, embutido: null, proprios: null, limitado: false };
+    const usaFgts = mod !== 'embutido' && l.fgtsAtivo && (mod === 'fixo' ? l.fixoUsarFgts : l.livreUsarFgts);
+    const out = { pct, pctEmbutido: usar ? pctE : 0, usaEmbutido: usar, usaFgts, total: null, embutido: null, fgts: null, proprios: null, limitado: false };
     if (!isNum(pct) || !isNum(base)) return out;
     out.total = (pct / 100) * base;
     let e = usar && isNum(pctE) ? (pctE / 100) * base : 0;
     if (e > out.total) { e = out.total; out.limitado = true; }
     out.embutido = e;
-    out.proprios = out.total - e;
+    // FGTS complementa o lance e reduz os recursos próprios (limitado ao que falta após o embutido)
+    const fv = num(l.fgtsValor);
+    out.fgts = usaFgts && isNum(fv) ? Math.min(Math.max(0, fv), out.total - e) : 0;
+    out.proprios = out.total - e - out.fgts;
     return out;
   }
 
@@ -306,8 +323,9 @@
     res.pagoAdesao = soma(1, mesC, 'adesao');
     res.totalParcelas = soma(1, mesC, 'total');
     res.proprios = lance ? lance.proprios : 0;
+    res.fgts = lance && isNum(lance.fgts) ? lance.fgts : 0;
     res.lanceTotal = lance ? lance.total : 0;
-    res.totalAportado = isNum(res.totalParcelas) && isNum(res.proprios) ? res.totalParcelas + res.proprios : null;
+    res.totalAportado = isNum(res.totalParcelas) && isNum(res.proprios) ? res.totalParcelas + res.proprios + res.fgts : null;
     res.venda = isNum(res.credLiquido) ? (REGRAS.vendaPct / 100) * res.credLiquido : null;
     res.resultado = isNum(res.venda) && isNum(res.totalAportado) ? res.venda - res.totalAportado : null;
     res.rentabilidade = isNum(res.resultado) && res.totalAportado > 0 ? (res.resultado / res.totalAportado) * 100 : null;
@@ -334,7 +352,7 @@
   // Cenário com memória de cálculo (tabelas de cenários)
   // ---------------------------------------------------------------------------
 
-  const NOMES_MOD = { sorteio: 'Sorteio', embutido: 'Lance embutido', fixo: 'Lance fixo', livre: 'Lance livre' };
+  const NOMES_MOD = { sorteio: 'Sorteio', embutido: 'Lance Embutido', fixo: 'Lance Fixo', livre: 'Lance Livre' };
   const TITULOS = {
     sorteio: 'Contemplação por sorteio',
     embutido: 'Contemplação por lance embutido',
@@ -450,6 +468,7 @@
       if (!isNum(v)) add('erro', 'lances.' + campo, rot + ': informe o percentual.');
       else if (v < 0 || v > 100) add('erro', 'lances.' + campo, rot + ': percentual inválido (0 a 100%).');
     };
+    if (l.fgtsAtivo && !isNum(num(l.fgtsValor))) add('erro', 'lances.fgtsValor', 'FGTS ativado: informe o valor disponível.');
     if (l.embutidoAtivo) pctOk('embutidoPct', 'Lance embutido');
     if (l.fixoAtivo) pctOk('fixoPct', 'Lance fixo');
     if (l.livreAtivo) pctOk('livrePct', 'Lance livre');
@@ -621,15 +640,16 @@
     if (!n.ok || !isNum(n.totalPlano) || !isNum(n.credLiquido) || !isNum(n.proprios)) return out;
     const fluxos = [0];
     n.linhas.forEach((l) => fluxos.push(-(l.total || 0)));
-    fluxos[n.mesC] += n.credLiquido - n.proprios;
+    fluxos[n.mesC] += n.credLiquido - n.proprios - n.fgts;
     const i = tirMensal(fluxos);
     out.ok = true;
     out.mesC = n.mesC;
     out.credito = n.credLiquido;
     out.proprios = n.proprios;
+    out.fgts = n.fgts;
     out.totalParcelas = n.totalPlano;
     out.prazoEfetivo = n.mesC + n.prazoRestante;
-    out.desembolso = n.totalPlano + n.proprios;
+    out.desembolso = n.totalPlano + n.proprios + n.fgts;
     out.custo = out.desembolso - n.credLiquido;
     out.custoPct = n.credLiquido > 0 ? (out.custo / n.credLiquido) * 100 : null;
     out.cetMes = isNum(i) ? i * 100 : null;
@@ -641,22 +661,23 @@
   // Simulação de alavancagem: contemplação e venda em meses sucessivos
   // ---------------------------------------------------------------------------
 
-  const PASSO_ALAVANCAGEM = 6;
-  const ATE_ALAVANCAGEM = 49;
+  // Meses 1 a 12 um a um; depois de 6 em 6 até o mês 48
+  const MESES_ALAVANCAGEM = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 18, 24, 30, 36, 42, 48];
 
   function alavancagem(s) {
     const b = basicos(s);
     if (!b.ok) return [];
     const mods = ['sorteio'];
     if (s.lances.embutidoAtivo) mods.push('embutido');
-    const meses = [];
-    for (let m = 1; m <= Math.min(ATE_ALAVANCAGEM, b.N); m += PASSO_ALAVANCAGEM) meses.push(m);
+    const meses = MESES_ALAVANCAGEM.filter((m) => m <= b.N);
     return mods.map((mod) => ({
       mod,
       nome: NOMES_MOD[mod],
       linhas: meses.map((m) => {
         const n = nucleo(s, mod, m);
-        return { m, credito: n.credLiquido, parcela: n.parcelaMes, aporte: n.totalAportado, venda: n.venda, lucro: n.resultado, rentabilidade: n.rentabilidade };
+        // Rentabilidade ao mês: taxa mensal equivalente do resultado no prazo da linha
+        const rentMes = isNum(n.venda) && isNum(n.totalAportado) && n.totalAportado > 0 && n.venda > 0 ? (Math.pow(n.venda / n.totalAportado, 1 / m) - 1) * 100 : null;
+        return { m, credito: n.credLiquido, parcela: n.parcelaMes, aporte: n.totalAportado, venda: n.venda, lucro: n.resultado, rentabilidade: rentMes, rentabilidadeTotal: n.rentabilidade };
       })
     }));
   }
@@ -683,7 +704,7 @@
       baseLance,
       projecoes: projecoes(s, nucleos),
       alavancagem: alavancagem(s),
-      aquisicao: modsAtivas(s).filter((m) => m !== 'sorteio').map((m) => aquisicao(s, m)),
+      aquisicao: ['sorteio'].concat(s.lances.embutidoAtivo ? ['embutido'] : []).map((m) => aquisicao(s, m)),
       premissas: premissas(s),
       pontosConfirmar: pontosConfirmar(s),
       redutorPct: redutorPct(s.parcela),
@@ -693,7 +714,7 @@
 
   return {
     INDICES, CATEGORIAS, ADMINISTRADORAS, MODALIDADES_PARCELA, REGRAS, MSG, NOMES_MOD,
-    estadoPadrao, simular, nucleo, aquisicao, tirMensal, vpl, cenario, validar, fator, qtdReajustes, parcelaDataBase, redutorPct,
+    estadoPadrao, aplicarCategoria, simular, nucleo, aquisicao, tirMensal, vpl, cenario, validar, fator, qtdReajustes, parcelaDataBase, redutorPct,
     nomeIndice, taxaIndice, indiceEstimado, lanceSobre,
     fmtBRL, fmtPct, fmtNum, num, isNum
   };

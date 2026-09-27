@@ -101,8 +101,21 @@
       el.value = v === null ? '' : C.fmtBRL(v);
       return v;
     }
+    if (el.hasAttribute('data-telefone')) {
+      el.value = formatarTelefone(el.value);
+      return el.value;
+    }
     if (el.type === 'number') return el.value === '' ? null : Number(el.value);
     return el.value;
+  }
+
+  /** Formata o telefone como (11) 98765-4321 enquanto é digitado. */
+  function formatarTelefone(txt) {
+    const d = String(txt || '').replace(/\D/g, '').slice(0, 11);
+    if (d.length <= 2) return d ? '(' + d : '';
+    if (d.length <= 6) return '(' + d.slice(0, 2) + ') ' + d.slice(2);
+    if (d.length <= 10) return '(' + d.slice(0, 2) + ') ' + d.slice(2, 6) + '-' + d.slice(6);
+    return '(' + d.slice(0, 2) + ') ' + d.slice(2, 7) + '-' + d.slice(7);
   }
 
   function avaliarCondicao(expr) {
@@ -127,9 +140,9 @@
       if (el.hasAttribute('data-moeda') && ev.type === 'change') return;
       definir(el.dataset.k, lerCampo(el));
       if (el.dataset.k === 'plano.categoria') {
-        // Sugestão de índice por categoria (pode ser alterada em seguida)
-        estado.plano.indice = C.CATEGORIAS[estado.plano.categoria].indice;
-        $('#f-indice').value = estado.plano.indice;
+        // Valores fixos da categoria (crédito, prazo, taxas e índice); podem ser editados em seguida
+        C.aplicarCategoria(estado.plano, estado.plano.categoria);
+        escreverCampos();
       }
       aplicarVisibilidade();
       atualizar();
@@ -212,7 +225,7 @@
   function exemplo() {
     // Valores fictícios, apenas para demonstrar o funcionamento.
     const s = C.estadoPadrao();
-    Object.assign(s.plano, { lead: 'Exemplo ilustrativo', categoria: 'imovel', credito: 300000, prazo: 240, mesContemplacao: 12, taxaAdm: 18, fundoReserva: 2, indice: 'incc', indiceTaxa: 5, seguroAtivo: true });
+    Object.assign(s.plano, { lead: 'Exemplo ilustrativo', mesContemplacao: 12, indiceTaxa: 5, seguroAtivo: true });
     s.parcela.modalidade = 'r50';
     Object.assign(s.lances, { embutidoAtivo: true, fixoAtivo: true, fixoUsarEmbutido: true, livreAtivo: true, livrePct: 35, livreUsarEmbutido: true });
     s.projecoes = { parcelas: true, credito: true, rentabilidade: true };
@@ -222,9 +235,7 @@
   const acoes = {
     nova() {
       confirmar('Iniciar uma nova proposta? Os campos voltarão aos valores iniciais.', 'Nova proposta', () => {
-        const whatsapp = estado.contato.whatsapp;
         estado = C.estadoPadrao();
-        estado.contato.whatsapp = whatsapp; // contato do especialista é mantido entre propostas
         revelados.clear();
         escreverCampos(); atualizar();
         $('#f-lead').focus();
@@ -457,8 +468,8 @@
       ['Indexador de reajuste', C.nomeIndice(p) + (C.isNum(t) ? ' (' + C.fmtPct(t) + ' a.a.)' : '')],
       ['Seguro prestamista', p.seguroAtivo ? 'Sim (' + C.fmtPct(C.num(p.seguroPct), 3) + ' a.m.)' : 'Não'],
       ['Adesão', p.adesaoAtiva ? 'Sim (' + C.fmtPct(C.num(p.adesaoPct)) + ' em ' + (p.adesaoMeses || '—') + ' meses)' : 'Não'],
-      ['Abatimento do lance', p.abatimento === 'prazo' ? 'No prazo' : 'Na parcela'],
-      ['Projeção de contemplação', 'Mês ' + (p.mesContemplacao || '—')]
+      ['Abatimento do lance', p.abatimento === 'prazo' ? 'Prazo' : 'Parcela'],
+      ['Projeção de contemplação', String(p.mesContemplacao || '—')]
     ];
     return '<section class="bloco-res vitrine">' + tituloSecao('Características do', 'Plano', 'Condições') +
       '<dl class="lista-info">' + lista.map(([k, v]) => '<div><dt>' + k + '</dt><dd>' + esc(v) + '</dd></div>').join('') + '</dl></section>';
@@ -478,6 +489,7 @@
     h += '<div class="forma-dados' + (oculto ? ' borrado' : '') + '"' + (oculto ? ' aria-hidden="true"' : '') + '>';
     h += linha('Crédito contratado', v(base), 'forte');
     h += linha('Lance embutido', pct(n.embutido) + v(n.embutido));
+    if (s.lances.fgtsAtivo) h += linha('FGTS', pct(n.fgts) + v(n.fgts));
     h += linha('Lance recursos próprios', pct(n.proprios) + v(n.proprios));
     h += linha('Crédito disponível', v(n.credLiquido), 'realce');
     h += linha('Prazo remanescente', n.prazoRestante + ' meses');
@@ -499,8 +511,8 @@
     const f = (x) => (C.isNum(x) ? C.fmtBRL(x) : '<span class="nc">n/c</span>');
     const cor = (x) => (C.isNum(x) ? (x >= 0 ? 'positivo' : 'negativo') : '');
     return '<div class="alav"><h3 class="alav-titulo">Alavancagem via <span class="acento">' + esc(a.nome) + '</span>' + (pdf ? '' : botaoOlho(id, 'cenário de venda via ' + a.nome.toLowerCase())) + '</h3>' +
-      '<div class="rolagem-x' + (oculto ? ' borrado' : '') + '"' + (oculto ? ' aria-hidden="true"' : '') + '><table class="tab-alav"><thead><tr><th>Mês</th><th>Crédito</th><th>Parcela atual</th><th>Aporte</th><th>Vl. venda</th><th>Lucro (R$)</th><th>Rentabilidade (%)</th></tr></thead><tbody>' +
-      a.linhas.map((l) => '<tr><td>' + l.m + '</td><td>' + f(l.credito) + '</td><td>' + f(l.parcela) + '</td><td>' + f(l.aporte) + '</td><td>' + f(l.venda) + '</td><td class="' + cor(l.lucro) + '">' + f(l.lucro) + '</td><td class="' + cor(l.rentabilidade) + '">' + (C.isNum(l.rentabilidade) ? C.fmtPct(l.rentabilidade, 1) : '—') + '</td></tr>').join('') +
+      '<div class="rolagem-x' + (oculto ? ' borrado' : '') + '"' + (oculto ? ' aria-hidden="true"' : '') + '><table class="tab-alav"><thead><tr><th>Mês</th><th>Crédito</th><th>Parcela atual</th><th>Aporte</th><th>Vl. venda</th><th>Lucro (R$)</th><th>Rentab. a.m.</th></tr></thead><tbody>' +
+      a.linhas.map((l) => '<tr><td>' + l.m + '</td><td>' + f(l.credito) + '</td><td>' + f(l.parcela) + '</td><td>' + f(l.aporte) + '</td><td>' + f(l.venda) + '</td><td class="' + cor(l.lucro) + '">' + f(l.lucro) + '</td><td class="' + cor(l.rentabilidade) + '">' + (C.isNum(l.rentabilidade) ? C.fmtPct(l.rentabilidade, 2) : '—') + '</td></tr>').join('') +
       '</tbody></table></div></div>';
   }
 
@@ -593,7 +605,7 @@
       '<footer class="pdf-rodape"><span>' + esc(s.plano.lead) + '</span><span>' + n + ' / ' + total + '</span></footer></section>';
   }
 
-  function pdfCartaoForma(n, mod) {
+  function pdfCartaoForma(n, mod, comFgts) {
     const v = (x) => (C.isNum(x) ? C.fmtBRL(x) : '—');
     const base = n.credBruto;
     const pct = (x) => (C.isNum(x) && C.isNum(base) && base > 0 ? '(' + C.fmtNum((x / base) * 100, 0) + '%) ' : '');
@@ -602,12 +614,13 @@
     return h + pdfLinhas([
       ['Crédito contratado', v(base), 'forte'],
       ['Lance embutido', pct(n.embutido) + v(n.embutido)],
+    ].concat(comFgts ? [['FGTS', pct(n.fgts) + v(n.fgts)]] : []).concat([
       ['Recursos próprios', pct(n.proprios) + v(n.proprios)],
       ['Crédito disponível', v(n.credLiquido), 'realce'],
       ['Prazo remanescente', n.prazoRestante + ' meses'],
       ['Parcela pós-contemplação', v(n.parcelaPosAtual), 'acento-valor'],
       ['Saldo devedor', v(n.saldoDevedor)]
-    ]) + '</article>';
+    ])) + '</article>';
   }
 
   function montarProposta(s, r) {
@@ -633,12 +646,12 @@
       ['Indexador de reajuste', C.nomeIndice(p) + (C.isNum(t) ? ' (' + C.fmtPct(t) + ' a.a.)' : '')],
       ['Seguro prestamista', p.seguroAtivo ? 'Sim (' + C.fmtPct(C.num(p.seguroPct), 3) + ' a.m.)' : 'Não'],
       ['Adesão', p.adesaoAtiva ? 'Sim (' + C.fmtPct(C.num(p.adesaoPct)) + ' em ' + (p.adesaoMeses || '—') + ' meses)' : 'Não'],
-      ['Abatimento do lance', p.abatimento === 'prazo' ? 'No prazo' : 'Na parcela'],
-      ['Projeção de contemplação', 'Mês ' + (p.mesContemplacao || '—')]
+      ['Abatimento do lance', p.abatimento === 'prazo' ? 'Prazo' : 'Parcela'],
+      ['Projeção de contemplação', String(p.mesContemplacao || '—')]
     ];
     p1 += '<div class="pdf-bloco">' + pdfTitulo('Características do', 'Plano') + '<dl class="pdf-carac">' + carac.map(([k, v]) => '<div><dt>' + k + '</dt><dd>' + esc(v) + '</dd></div>').join('') + '</dl></div>';
     const mods1 = ['sorteio', 'embutido', 'fixo'].filter((m) => nucleo(m));
-    p1 += '<div class="pdf-bloco">' + pdfTitulo('Formas de', 'Contemplação') + '<div class="pdf-grade c' + mods1.length + '">' + mods1.map((m) => pdfCartaoForma(nucleo(m), m)).join('') + '</div></div>';
+    p1 += '<div class="pdf-bloco">' + pdfTitulo('Formas de', 'Contemplação') + '<div class="pdf-grade c' + mods1.length + '">' + mods1.map((m) => pdfCartaoForma(nucleo(m), m, s.lances.fgtsAtivo)).join('') + '</div></div>';
 
     // Página 2: panorama de venda e alavancagem
     const f = (x) => (C.isNum(x) ? C.fmtBRL(x) : '—');
@@ -647,8 +660,8 @@
       '<p class="pdf-ident">Venda da carta contemplada estimada em ' + C.REGRAS.vendaPct + '% do crédito disponível. Aporte: parcelas pagas até o mês.</p></header>';
     r.alavancagem.forEach((a) => {
       p2 += '<div class="pdf-bloco">' + pdfTitulo('Alavancagem via', a.nome) +
-        '<table class="pdf-tab"><thead><tr><th>Mês</th><th>Crédito</th><th>Parcela atual</th><th>Aporte</th><th>Vl. venda</th><th>Lucro (R$)</th><th>Rentab.</th></tr></thead><tbody>' +
-        a.linhas.map((l) => '<tr><td>' + l.m + '</td><td>' + f(l.credito) + '</td><td>' + f(l.parcela) + '</td><td>' + f(l.aporte) + '</td><td>' + f(l.venda) + '</td><td class="' + cor(l.lucro) + '">' + f(l.lucro) + '</td><td class="' + cor(l.rentabilidade) + '">' + (C.isNum(l.rentabilidade) ? C.fmtPct(l.rentabilidade, 1) : '—') + '</td></tr>').join('') +
+        '<table class="pdf-tab"><thead><tr><th>Mês</th><th>Crédito</th><th>Parcela atual</th><th>Aporte</th><th>Vl. venda</th><th>Lucro (R$)</th><th>Rentab. a.m.</th></tr></thead><tbody>' +
+        a.linhas.map((l) => '<tr><td>' + l.m + '</td><td>' + f(l.credito) + '</td><td>' + f(l.parcela) + '</td><td>' + f(l.aporte) + '</td><td>' + f(l.venda) + '</td><td class="' + cor(l.lucro) + '">' + f(l.lucro) + '</td><td class="' + cor(l.rentabilidade) + '">' + (C.isNum(l.rentabilidade) ? C.fmtPct(l.rentabilidade, 2) : '—') + '</td></tr>').join('') +
         '</tbody></table></div>';
     });
     if (!r.alavancagem.length) p2 += '<p class="nc">Não calculado: complete os dados do plano.</p>';
@@ -670,8 +683,7 @@
         ['Prazo total', a.prazoEfetivo + ' meses']
       ]) + '</article>';
     }).join('') + '</div>';
-    if (!aq.length) p3 += '<p class="nc">Ative um lance para ver o cenário de aquisição.</p>';
-    const wa = numeroWhatsapp(s.contato && s.contato.whatsapp);
+    const wa = numeroWhatsapp((window.CONFIG_SIMULADOR || {}).whatsappEspecialista);
     const msg = encodeURIComponent('Olá! Recebi a proposta de consórcio' + (p.lead ? ' de ' + p.lead : '') + ' e gostaria de conversar.');
     p3 += '<div class="pdf-cta"><div><h3>Vamos dar o próximo passo?</h3><p>Fale com o especialista para tirar dúvidas e seguir com a proposta.</p></div>' +
       (wa ? '<a class="pdf-botao" href="https://wa.me/' + wa + '?text=' + msg + '">Falar no WhatsApp</a>' : '<span class="pdf-botao inativo">Falar no WhatsApp</span>') + '</div>';
@@ -693,16 +705,26 @@
     const s = estado;
     const r = C.simular(s);
     const lead = String(s.plano.lead || '').trim();
-    if (!lead) { avisar('Informe o nome completo antes de gerar a proposta.'); $('#f-lead').focus(); return; }
+    if (!lead) { avisar('Informe o nome completo do cliente antes de gerar a proposta.'); $('#f-lead').focus(); return; }
+    const foneCliente = numeroWhatsapp(s.contato && s.contato.cliente);
+    if (foneCliente.length < 12) { avisar('Informe o contato (WhatsApp) do cliente com DDD antes de gerar a proposta.'); $('#f-contato').focus(); return; }
     const erros = r.validacoes.filter((v) => v.nivel === 'erro');
     const prop = montarProposta(s, r);
     $('#proposta').innerHTML = prop.html;
     const nota = (erros.length ? '<p class="aviso">Há ' + erros.length + ' erro(s) de preenchimento. Os itens afetados aparecem como "Não calculado".</p>' : '') +
-      (prop.semWhatsapp ? '<p class="aviso">Informe o WhatsApp do especialista no menu para ativar o botão da página 3.</p>' : '');
+      (prop.semWhatsapp ? '<p class="aviso">O botão "Falar no WhatsApp" da página 3 está sem número: informe o WhatsApp do especialista em js/config.js.</p>' : '');
+    const primeiro = lead.split(/\s+/)[0];
+    const R = r.resumo;
+    const msg = 'Olá, ' + primeiro + '! Segue a sua proposta de consórcio' +
+      (C.isNum(R.credito.v) ? ': crédito de ' + C.fmtBRL(R.credito.v) : '') +
+      (C.isNum(R.parcelaInicial.v) ? ', parcela inicial de ' + C.fmtBRL(R.parcelaInicial.v) : '') +
+      (C.isNum(R.prazo.v) ? ' em ' + R.prazo.v + ' meses' : '') + '. Envio o PDF com todos os detalhes em seguida.';
+    const envio = '<div class="envio"><div><b>Enviar ao cliente</b><p>1. Salve o PDF. 2. Abra a conversa com ' + esc(s.contato.cliente) + ' e anexe o arquivo.</p></div>' +
+      '<a class="botao-whats" href="https://wa.me/' + foneCliente + '?text=' + encodeURIComponent(msg) + '" target="_blank" rel="noopener">Abrir conversa no WhatsApp</a></div>';
     const notaArtifact = window.MODO_ARTIFACT ? '<p class="nota">Nesta versão on-line a impressão está bloqueada. Para salvar em PDF, abra o arquivo <b>index.html</b> do simulador no navegador e use "Salvar em PDF".</p>' : '';
     const botoes = [{ texto: 'Fechar' }];
     if (!window.MODO_ARTIFACT) botoes.push({ texto: 'Salvar em PDF', primario: true, acao: () => { imprimir(lead, prop.data); } });
-    janela('<h2>Prévia da proposta</h2>' + nota + notaArtifact + '<div class="previa">' + prop.html + '</div>', botoes, true);
+    janela('<h2>Prévia da proposta</h2>' + nota + notaArtifact + envio + '<div class="previa">' + prop.html + '</div>', botoes, true);
   }
 
   // ---------------------------------------------------------------------------

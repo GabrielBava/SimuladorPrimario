@@ -1,6 +1,6 @@
 # Especificação funcional — Simulador de Cartas de Consórcio Primárias
 
-Versão 2.3 · Implementação de referência: `index.html`, `js/calc.js` (motor de cálculo) e `js/app.js` (interface).
+Versão 2.4 · Implementação de referência: `index.html`, `js/calc.js` (motor de cálculo) e `js/app.js` (interface).
 
 > **Observação obrigatória:** a simulação depende dos dados do grupo, do contrato, das regras da administradora e das premissas inseridas. Nenhum valor é contratual. Não há garantia de contemplação, venda, lucro, valorização ou rentabilidade.
 
@@ -135,6 +135,23 @@ Cada cartão de lance lembra onde o lance é abatido (parcela ou prazo). No sort
 - As páginas têm tamanho fixo (210 × 297 mm), com rodapé com nome do cliente e numeração.
 - O PDF traz todos os dados, independentemente dos olhos da tela, que servem só para a apresentação.
 - O botão abre `https://wa.me/55<número>` com uma mensagem pronta. O número vem do campo **WhatsApp do especialista**, no menu, que é mantido ao iniciar uma nova proposta. Sem número, o botão aparece desativado e a prévia avisa.
+
+### 2.8 Ajustes v2.4
+
+- **Categoria com valores fixos:** ao selecionar, aplica ao plano (editável depois):
+
+  | Categoria | Crédito | Prazo | Taxa adm. | Fundo de reserva | Índice |
+  |---|---|---|---|---|---|
+  | Imóvel | R$ 200.000 | 240 meses | 20% | 2% | INCC |
+  | Veículo | R$ 80.000 | 100 meses | 13% | 2% | IPCA |
+
+- **Contato do cliente (WhatsApp):** campo obrigatório, com o mesmo destaque do nome e máscara (11) 98765-4321. Nome e contato são exigidos para gerar a proposta. A prévia tem o botão **Abrir conversa no WhatsApp** (link `wa.me` para o cliente, com mensagem pronta); o PDF salvo é anexado na conversa.
+- **WhatsApp do especialista:** sai do menu e passa a ser configurado em `js/config.js` (`whatsappEspecialista`), usado no botão da página 3 do PDF.
+- **Abatimento do lance:** opções "Parcela" e "Prazo", com descrição abaixo do campo.
+- **Estratégia de Lance** (antes "Estratégias de Contemplação"), com títulos em maiúsculas. Campo **FGTS** no início (valor em R$); "Usar FGTS" no Lance Fixo e no Lance Livre. O FGTS complementa o lance, limitado ao que falta após o embutido: recursos próprios = lance − embutido − FGTS. O FGTS conta como aporte do cliente.
+- **Características do Plano:** projeção de contemplação só com o número (ex.: 12); abatimento "Parcela" ou "Prazo".
+- **Alavancagem:** meses 1 a 12 e depois 18, 24, 30, 36, 42 e 48. Rentabilidade ao mês = (Vl. venda ÷ Aporte)^(1/mês) − 1.
+- **Aquisição:** cenários de Sorteio e Lance Embutido.
 
 ## 3. Fórmulas
 

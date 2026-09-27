@@ -15,6 +15,9 @@ function base() {
 test('padrões do plano', () => {
   const s = Calc.estadoPadrao();
   assert.equal(s.plano.prazo, 240);
+  assert.equal(s.plano.credito, 200000);
+  assert.equal(s.plano.taxaAdm, 20);
+  assert.equal(s.plano.fundoReserva, 2);
   assert.equal(s.plano.mesContemplacao, 12);
   assert.equal(s.plano.seguroPct, 0.038);
   assert.equal(s.plano.indice, 'incc');
@@ -132,7 +135,9 @@ test('projeções só são calculadas quando selecionadas', () => {
 });
 
 test('validações de campos obrigatórios', () => {
-  const v = Calc.validar(Calc.estadoPadrao());
+  const vazio = Calc.estadoPadrao();
+  Object.assign(vazio.plano, { credito: null, taxaAdm: null, fundoReserva: null });
+  const v = Calc.validar(vazio);
   for (const c of ['plano.lead', 'plano.credito', 'plano.taxaAdm', 'plano.fundoReserva']) {
     assert.ok(v.some((x) => x.campo === c && x.nivel === 'erro'), c);
   }
@@ -157,12 +162,15 @@ test('total de taxas ao ano = (taxa de administração + fundo de reserva) ÷ an
   near(Calc.simular(s).resumo.taxaAno.v, 1.1);
 });
 
-test('alavancagem: linhas a cada 6 meses até o mês 49', () => {
+test('alavancagem: meses 1 a 12 e depois de 6 em 6 até 48', () => {
   const s = base();
   s.lances.embutidoAtivo = true;
   const a = Calc.simular(s).alavancagem;
   assert.deepEqual(a.map((x) => x.mod), ['sorteio', 'embutido']);
-  assert.deepEqual(a[0].linhas.map((l) => l.m), [1, 7, 13, 19, 25, 31, 37, 43, 49]);
+  assert.deepEqual(a[0].linhas.map((l) => l.m), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 18, 24, 30, 36, 42, 48]);
+  // rentabilidade ao mês: (venda ÷ aporte)^(1/m) − 1
+  const l12 = a[0].linhas[11];
+  near(l12.rentabilidade, (Math.pow(l12.venda / l12.aporte, 1 / 12) - 1) * 100);
   const l1 = a[1].linhas[0];
   near(l1.credito, 75000);
   near(l1.aporte, 1220);
@@ -193,5 +201,28 @@ test('aquisição: CET com fluxos de parcelas, lance e crédito', () => {
   n.linhas.forEach((l) => f.push(-l.total)); f[12] += 75000 - 25000;
   near(Calc.vpl(f, a.cetMes / 100), 0);
   const sim = Calc.simular(s);
-  assert.deepEqual(sim.aquisicao.map((x) => x.mod), ['embutido', 'fixo']);
+  assert.deepEqual(sim.aquisicao.map((x) => x.mod), ['sorteio', 'embutido']);
+});
+
+test('categoria aplica os valores fixos do plano', () => {
+  const p = Calc.estadoPadrao().plano;
+  Calc.aplicarCategoria(p, 'veiculo');
+  assert.deepEqual([p.credito, p.prazo, p.taxaAdm, p.fundoReserva, p.indice], [80000, 100, 13, 2, 'ipca']);
+  Calc.aplicarCategoria(p, 'imovel');
+  assert.deepEqual([p.credito, p.prazo, p.taxaAdm, p.fundoReserva, p.indice], [200000, 240, 20, 2, 'incc']);
+});
+
+test('FGTS complementa o lance fixo e reduz os recursos próprios', () => {
+  const s = base();
+  Object.assign(s.lances, { embutidoAtivo: true, fixoAtivo: true, fixoUsarEmbutido: true, fgtsAtivo: true, fgtsValor: 10000, fixoUsarFgts: true });
+  const n = Calc.nucleo(s, 'fixo');
+  near(n.lance.total, 50000);
+  near(n.embutido, 25000);
+  near(n.fgts, 10000);
+  near(n.proprios, 15000);
+  near(n.totalAportado, 14640 + 15000 + 10000, 'FGTS conta como aporte do cliente');
+  s.lances.fgtsValor = 90000;
+  near(Calc.nucleo(s, 'fixo').fgts, 25000, 'FGTS limitado ao que falta após o embutido');
+  s.lances.fixoUsarFgts = false;
+  near(Calc.nucleo(s, 'fixo').fgts, 0);
 });

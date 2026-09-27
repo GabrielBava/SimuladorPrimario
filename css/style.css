@@ -558,3 +558,16 @@ button, input, select, textarea { font: inherit; letter-spacing: inherit; }
 .pdf-disclaimer { font-size: 9px; padding: 11px 13px; }
 .pdf-disclaimer b { font-size: 9.5px; }
 .pdf-rodape { left: 13mm; right: 13mm; bottom: 7mm; font-size: 9px; }
+
+/* v9: envio ao cliente, FGTS e tabela do PDF com 18 linhas */
+.bloco-fgts { border-top: 0; margin-top: 0; padding-top: 0; }
+.envio { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; padding: 12px 14px; margin: 10px 0 14px; border-radius: 12px; border: 1px solid var(--acento-borda); background: var(--acento-suave); }
+.envio b { font-family: var(--fonte-display); font-size: 1rem; }
+.envio p { margin: 2px 0 0; color: var(--suave); font-size: .85rem; }
+.botao-whats { flex: none; padding: 9px 16px; border-radius: 999px; background: var(--acento); color: var(--sobre-destaque); font-weight: 600; text-decoration: none; font-size: .88rem; }
+.botao-whats:hover { background: var(--acento-hover); }
+.pdf-tab td { padding: 4.2px 8px; font-size: 9.2px; }
+.pdf-tab th { padding: 6px 8px; }
+.pdf-tab td { padding: 3.1px 8px; }
+.pdf-pagina .pdf-bloco:has(.pdf-tab) { padding: 10px 13px; }
+.pdf-pagina .pdf-bloco:has(.pdf-tab) .pdf-h2 { margin-bottom: 6px; }
