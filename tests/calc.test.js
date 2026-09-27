@@ -151,10 +151,10 @@ test('lance embutido: sem recursos próprios e saldo devedor abatido pelo lance'
   near(emb.parcelaPosAtual * 88, emb.saldoDevedor, 'parcela × prazo = saldo (sem seguro)');
 });
 
-test('taxa ao ano = taxa de administração ÷ anos do plano', () => {
+test('total de taxas ao ano = (taxa de administração + fundo de reserva) ÷ anos do plano', () => {
   const s = base();
   s.plano.prazo = 240;
-  near(Calc.simular(s).resumo.taxaAno.v, 1);
+  near(Calc.simular(s).resumo.taxaAno.v, 1.1);
 });
 
 test('alavancagem: linhas a cada 6 meses até o mês 49', () => {
@@ -168,4 +168,30 @@ test('alavancagem: linhas a cada 6 meses até o mês 49', () => {
   near(l1.aporte, 1220);
   near(l1.venda, 15000);
   near(l1.lucro, 15000 - 1220);
+});
+
+test('TIR mensal recupera a taxa de um fluxo conhecido', () => {
+  // recebe 1000 no mês 1 e paga 12 parcelas de 100 nos meses 2..13
+  const f = [0, 1000]; for (let t = 2; t <= 13; t++) f.push(-100);
+  const i = Calc.tirMensal(f);
+  near(Calc.vpl(f, i), 0);
+  assert.ok(i > 0.02 && i < 0.04);
+});
+
+test('aquisição: CET com fluxos de parcelas, lance e crédito', () => {
+  const s = base();
+  s.reajuste = undefined;
+  Object.assign(s.lances, { embutidoAtivo: true, fixoAtivo: true, fixoUsarEmbutido: true });
+  const a = Calc.aquisicao(s, 'fixo');
+  assert.ok(a.ok);
+  near(a.credito, 75000);
+  near(a.proprios, 25000);
+  near(a.desembolso, a.totalParcelas + 25000);
+  near(a.custo, a.desembolso - 75000);
+  assert.ok(a.cetMes > 0 && a.cetAno > a.cetMes);
+  const f = [0]; const n = Calc.nucleo(s, 'fixo');
+  n.linhas.forEach((l) => f.push(-l.total)); f[12] += 75000 - 25000;
+  near(Calc.vpl(f, a.cetMes / 100), 0);
+  const sim = Calc.simular(s);
+  assert.deepEqual(sim.aquisicao.map((x) => x.mod), ['embutido', 'fixo']);
 });

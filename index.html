@@ -16,20 +16,16 @@
   <aside class="sidebar" id="sidebar">
     <div class="toolbar">
       <button type="button" data-acao="pdf" class="primario">Gerar proposta (PDF)</button>
-      <button type="button" data-acao="nova">Nova simulação</button>
-      <button type="button" data-acao="salvarPadrao">Salvar como padrão</button>
-      <button type="button" data-acao="exemplo">Carregar exemplo</button>
-      <button type="button" data-acao="exportar">Exportar JSON</button>
-      <button type="button" data-acao="importar">Importar JSON</button>
-      <button type="button" data-acao="fabrica" class="discreto">Restaurar padrão de fábrica</button>
-      <input type="file" id="arquivoImportar" accept="application/json,.json" hidden>
+      <button type="button" data-acao="nova">Nova proposta</button>
+      <button type="button" data-acao="salvar">Salvar proposta</button>
     </div>
+
+    <label class="f campo-cliente"><span>Nome completo <em class="req">*</em></span>
+      <input type="text" id="f-lead" data-k="plano.lead" maxlength="80" autocomplete="off"></label>
 
     <!-- 1. Dados do plano -->
     <details class="secao" open data-secao="plano">
       <summary>Dados do plano</summary>
-      <label class="f"><span>Nome completo <em class="req">*</em></span>
-        <input type="text" id="f-lead" data-k="plano.lead" maxlength="80" autocomplete="off"></label>
       <fieldset class="f segmentado">
         <legend>Categoria</legend>
         <div class="seg-opcoes">
@@ -145,6 +141,10 @@
       </div>
     </details>
   </aside>
+
+  <button type="button" class="botao-menu" id="botaoMenu" aria-controls="sidebar" aria-label="Ocultar menu" title="Ocultar menu">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M9.5 4.5v15"/><path class="seta" d="m15.5 10-2 2 2 2"/></svg>
+  </button>
 
   <!-- ===================== RESULTADOS ===================== -->
   <main class="principal" id="principal" aria-live="polite"></main>

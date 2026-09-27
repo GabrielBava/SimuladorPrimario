@@ -4,7 +4,6 @@
   'use strict';
 
   const C = window.Calc;
-  const CHAVE_PADRAO = 'simconsorcio.v2.padrao';
   const CHAVE_ATUAL = 'simconsorcio.v2.atual';
   const $ = (sel, el) => (el || document).querySelector(sel);
   const $$ = (sel, el) => Array.from((el || document).querySelectorAll(sel));
@@ -32,10 +31,10 @@
     try { localStorage.setItem(chave, JSON.stringify(valor)); return true; } catch (e) { return false; }
   }
 
-  const padraoSalvo = () => mesclar(C.estadoPadrao(), ler(CHAVE_PADRAO) || {});
-  const salvo = ler(CHAVE_ATUAL) || ler(CHAVE_PADRAO);
+  const salvo = ler(CHAVE_ATUAL);
   let estado = null; // definido na inicialização (exemplo ilustrativo na primeira visita)
   const abertos = new Set();
+  const revelados = new Set(); // lances e tabelas de venda exibidos ao cliente (começam ocultos)
   const graficos = new Map(); // dados dos gráficos exibidos, para o tooltip
 
   function obter(caminho) { return caminho.split('.').reduce((o, k) => (o == null ? o : o[k]), estado); }
@@ -51,8 +50,6 @@
   // ---------------------------------------------------------------------------
 
   const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const NOMES_TIPO = { informado: 'Informado', calculado: 'Calculado', estimado: 'Estimado', pendente: 'Pendente', na: 'Não aplicável' };
-  const tag = (tipo) => '<span class="tag t-' + tipo + '">' + (NOMES_TIPO[tipo] || tipo) + '</span>';
   const SERIE = { sorteio: 1, embutido: 1, fixo: 1, livre: 1 };
   const ICONES = {
     sorteio: '<rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1.3" class="ic-p"/><circle cx="15" cy="15" r="1.3" class="ic-p"/><circle cx="15" cy="9" r="1.3" class="ic-p"/><circle cx="9" cy="15" r="1.3" class="ic-p"/>',
@@ -72,22 +69,6 @@
     if (formato === 'pct') return C.fmtPct(val.v, 2);
     if (formato === 'meses') return C.fmtNum(val.v, 0) + ' meses';
     return C.fmtBRL(val.v);
-  }
-
-  function memoria(val, id, pdf) {
-    if (!val) return '';
-    const partes = [];
-    if (val.formula) partes.push('<div><b>Fórmula / valores:</b> <span class="pre">' + esc(val.formula) + '</span></div>');
-    if (val.origem) partes.push('<div><b>Origem:</b> ' + esc(val.origem) + '</div>');
-    if (val.nota) partes.push('<div><b>Observação:</b> ' + esc(val.nota) + '</div>');
-    if (val.pend && val.pend.length) partes.push('<div><b>Depende de:</b><ul>' + val.pend.slice(0, 6).map((p) => '<li>' + esc(p) + '</li>').join('') + '</ul></div>');
-    if (!partes.length) return '';
-    if (pdf) return '<div class="memo-pdf">' + partes.join('') + '</div>';
-    return '<details class="memo" data-id="' + id + '"' + (abertos.has(id) ? ' open' : '') + '><summary>memória</summary>' + partes.join('') + '</details>';
-  }
-
-  function linhaTabela(rotulo, val, formato, id, pdf, classe) {
-    return '<tr' + (classe ? ' class="' + classe + '"' : '') + '><th scope="row">' + rotulo + '</th><td class="num">' + fmt(val, formato) + '</td><td>' + tag(val ? val.tipo : 'pendente') + '</td><td class="col-memo">' + memoria(val, id, pdf) + '</td></tr>';
   }
 
   const nomeArquivo = (t) => (String(t || 'sem_nome').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w-]+/g, '_').replace(/^_+|_+$/g, '') || 'sem_nome');
@@ -159,13 +140,19 @@
       const b = ev.target.closest('button');
       if (b && b.dataset.acao) acoes[b.dataset.acao]();
     });
-    $('#arquivoImportar').addEventListener('change', importarArquivo);
     document.addEventListener('toggle', (ev) => {
       const d = ev.target;
       if (d.matches && d.matches('details[data-id]')) { if (d.open) abertos.add(d.dataset.id); else abertos.delete(d.dataset.id); }
     }, true);
     const pr = $('#principal');
-    pr.addEventListener('click', (ev) => { if (ev.target.closest('[data-acao-menu]')) alternarMenu(); });
+    $('#botaoMenu').addEventListener('click', () => alternarMenu());
+    pr.addEventListener('click', (ev) => {
+      const olho = ev.target.closest('[data-olho]');
+      if (!olho) return;
+      const id = olho.dataset.olho;
+      if (revelados.has(id)) revelados.delete(id); else revelados.add(id);
+      atualizar();
+    });
     pr.addEventListener('pointermove', moverCursor);
     pr.addEventListener('pointerleave', esconderCursor, true);
   }
@@ -173,8 +160,11 @@
   function alternarMenu(forcar) {
     const oculto = forcar != null ? forcar : !document.body.classList.contains('menu-oculto');
     document.body.classList.toggle('menu-oculto', oculto);
-    const b = $('[data-acao-menu]');
-    if (b) b.textContent = oculto ? 'Mostrar menu' : 'Ocultar menu';
+    const b = $('#botaoMenu');
+    const rotulo = oculto ? 'Mostrar menu' : 'Ocultar menu';
+    b.setAttribute('aria-label', rotulo);
+    b.title = rotulo;
+    b.setAttribute('aria-expanded', String(!oculto));
     try { localStorage.setItem('simconsorcio.menuOculto', oculto ? '1' : '0'); } catch (e) { /* sem armazenamento */ }
   }
 
@@ -231,66 +221,37 @@
 
   const acoes = {
     nova() {
-      confirmar('Iniciar uma nova simulação? Os campos voltarão às configurações padrão salvas.', 'Iniciar nova simulação', () => {
-        estado = padraoSalvo();
-        estado.plano.lead = '';
-        escreverCampos(); atualizar();
-        avisar('Nova simulação iniciada com a configuração padrão.');
-      });
-    },
-    salvarPadrao() {
-      const p = clone(estado);
-      p.plano.lead = '';
-      avisar(gravar(CHAVE_PADRAO, p) ? 'Configuração atual salva como padrão (sem o nome).' : 'Não foi possível salvar neste navegador.');
-    },
-    fabrica() {
-      confirmar('Restaurar o padrão de fábrica? O padrão salvo será apagado e os campos voltarão aos valores iniciais.', 'Restaurar', () => {
-        try { localStorage.removeItem(CHAVE_PADRAO); } catch (e) { /* sem armazenamento */ }
+      confirmar('Iniciar uma nova proposta? Os campos voltarão aos valores iniciais.', 'Nova proposta', () => {
         estado = C.estadoPadrao();
+        estado.plano.lead = '';
+        revelados.clear();
         escreverCampos(); atualizar();
-        avisar('Padrão de fábrica restaurado.');
+        $('#f-lead').focus();
       });
     },
-    exemplo() {
-      confirmar('Carregar um exemplo com valores fictícios? Os campos atuais serão substituídos.', 'Carregar exemplo', () => {
-        estado = exemplo();
-        escreverCampos(); atualizar();
-      });
-    },
-    exportar() {
+    salvar() {
       const json = JSON.stringify({ versao: 2, gerado: new Date().toISOString(), estado }, null, 2);
       if (!window.MODO_ARTIFACT) {
         const a = document.createElement('a');
         a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
-        a.download = 'simulacao_' + nomeArquivo(estado.plano.lead) + '.json';
+        a.download = 'proposta_' + nomeArquivo(estado.plano.lead) + '.json';
         a.click();
         setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        avisar('Proposta salva.');
         return;
       }
-      janela('<h2>Dados da simulação (JSON)</h2><p class="nota">Copie o conteúdo e salve em um arquivo .json. Ele pode ser carregado depois em "Importar JSON".</p><textarea id="jsonExportado" readonly>' + esc(json) + '</textarea>', [
+      janela('<h2>Salvar proposta</h2><p class="nota">Copie o conteúdo e guarde em um arquivo .json.</p><textarea id="jsonExportado" readonly>' + esc(json) + '</textarea>', [
         { texto: 'Fechar' },
         { texto: 'Copiar', primario: true, acao: (j) => {
           const ta = j.querySelector('textarea');
           const selecionar = () => { ta.focus(); ta.select(); avisar('Texto selecionado: use Ctrl+C para copiar.'); };
-          try { navigator.clipboard.writeText(json).then(() => avisar('JSON copiado.'), selecionar); } catch (e) { selecionar(); }
+          try { navigator.clipboard.writeText(json).then(() => avisar('Proposta copiada.'), selecionar); } catch (e) { selecionar(); }
           return false;
         } }
       ], true);
     },
-    importar() { $('#arquivoImportar').click(); },
     pdf: gerarPdf
   };
-
-  function importarArquivo(ev) {
-    const f = ev.target.files[0];
-    if (!f) return;
-    f.text().then((t) => {
-      const dados = JSON.parse(t);
-      estado = mesclar(C.estadoPadrao(), dados.estado || dados);
-      escreverCampos(); atualizar();
-      avisar('Simulação importada.');
-    }).catch(() => avisar('Arquivo inválido: selecione um JSON exportado pelo simulador.')).finally(() => { ev.target.value = ''; });
-  }
 
   // ---------------------------------------------------------------------------
   // Gráficos (SVG simples, com tooltip)
@@ -457,87 +418,63 @@
 
   const AVISO = 'Esta simulação depende dos dados do grupo, do contrato, das regras da administradora e das premissas inseridas. Os valores são estimativas e não constituem valores contratuais. Não há garantia de contemplação, venda, lucro, valorização ou rentabilidade.';
 
-  function secAlertas(r) {
-    const grupos = { erro: [], alerta: [], info: [] };
-    r.validacoes.forEach((v) => grupos[v.nivel].push(v.msg));
-    const bloco = (nivel, titulo) => grupos[nivel].length
-      ? '<details class="alertas a-' + nivel + '" data-id="al-' + nivel + '"' + (nivel !== 'info' || abertos.has('al-' + nivel) ? ' open' : '') + '><summary>' + titulo + ' (' + grupos[nivel].length + ')</summary><ul>' + Array.from(new Set(grupos[nivel])).map((m) => '<li>' + esc(m) + '</li>').join('') + '</ul></details>'
-      : '';
-    const h = bloco('erro', 'Corrija para calcular') + bloco('alerta', 'Alertas') + bloco('info', 'Informações');
-    return h ? '<section class="bloco-res">' + h + '</section>' : '';
-  }
+  const OLHO = {
+    aberto: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+    fechado: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 5.6A10 10 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a17 17 0 0 1-3 3.7M6.3 6.8C3.9 8.5 2.5 12 2.5 12S6 18.5 12 18.5a9.7 9.7 0 0 0 4.2-.9"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>'
+  };
 
-  function cartao(rotulo, val, formato, id, extra) {
-    return '<div class="cartao"><div class="c-rot">' + rotulo + '</div><div class="c-val">' + fmt(val, formato) + '</div><div class="c-rod">' + tag(val ? val.tipo : 'pendente') + (extra || '') + '</div>' + memoria(val, id) + '</div>';
-  }
-
-  function textoIndice(p) {
-    const t = C.taxaIndice(p);
-    return C.nomeIndice(p) + (C.isNum(t) ? ' — ' + C.fmtPct(t) + ' ao ano' + (C.indiceEstimado(p) ? ' (estimado)' : '') : ' — taxa não informada');
-  }
-
-  function secResumo(s, r, pdf) {
-    const R = r.resumo;
-    const p = s.plano;
-    const destaque = (rot, val, formato, extra) => '<div class="kpi kpi-destaque"><div class="kpi-rot">' + rot + '</div><div class="kpi-val">' + fmt(val, formato) + '</div>' + (extra ? '<div class="kpi-extra">' + extra + '</div>' : '') + '</div>';
-    const simples = (rot, val, formato, extra) => '<div class="kpi"><div class="kpi-rot">' + rot + '</div><div class="kpi-val">' + fmt(val, formato) + '</div>' + (extra ? '<div class="kpi-extra">' + extra + '</div>' : '') + '</div>';
-    const redutor = s.parcela.modalidade === 'integral' ? 'Não' : 'Sim / ' + C.fmtPct(r.redutorPct, 0);
-    const t = C.taxaIndice(p);
-    const lista = [
-      ['Taxa administrativa', C.isNum(C.num(p.taxaAdm)) ? C.fmtPct(C.num(p.taxaAdm)) : '—'],
-      ['Fundo de reserva', C.isNum(C.num(p.fundoReserva)) ? C.fmtPct(C.num(p.fundoReserva)) : '—'],
-      ['Fator redutor', redutor],
-      ['Indexador de reajuste', C.nomeIndice(p) + (C.isNum(t) ? ' (' + C.fmtPct(t) + ' a.a.' + (C.indiceEstimado(p) ? ', estimado' : '') + ')' : ' (taxa não informada)')],
-      ['Seguro prestamista', p.seguroAtivo ? 'Sim (' + C.fmtPct(C.num(p.seguroPct), 3) + ' a.m.)' : 'Não'],
-      ['Adesão', p.adesaoAtiva ? 'Sim (' + C.fmtPct(C.num(p.adesaoPct)) + ' em ' + (p.adesaoMeses || '—') + ' meses)' : 'Não'],
-      ['Projeção de contemplação', 'Mês ' + (p.mesContemplacao || '—')]
-    ];
-    return '<section class="bloco-res vitrine">' + tituloSecao('Resumo da', 'Proposta', 'Visão geral') + '<div class="kpis">' +
-      destaque('Crédito', R.credito, 'brl', esc(C.CATEGORIAS[p.categoria].nome)) +
-      destaque('Parcela inicial', R.parcelaInicial, 'brl', s.parcela.modalidade !== 'integral' ? 'com redutor de ' + C.fmtPct(r.redutorPct, 0) : '') +
-      simples('Taxa ao ano', R.taxaAno, 'pct', 'administração') +
-      simples('Prazo', R.prazo, 'meses') +
-      '</div><dl class="lista-info">' + lista.map(([k, v]) => '<div><dt>' + k + '</dt><dd>' + esc(v) + '</dd></div>').join('') + '</dl></section>';
+  /** Botão de olho: mostra ou oculta dados ao cliente. */
+  function botaoOlho(id, rotulo) {
+    const vis = revelados.has(id);
+    return '<button type="button" class="olho' + (vis ? ' ativo' : '') + '" data-olho="' + id + '" aria-pressed="' + vis + '" aria-label="' + (vis ? 'Ocultar ' : 'Mostrar ') + esc(rotulo) + '" title="' + (vis ? 'Ocultar' : 'Mostrar') + '">' + (vis ? OLHO.aberto : OLHO.fechado) + '</button>';
   }
 
   function tituloSecao(a, b, eyebrow) {
     return (eyebrow ? '<p class="eyebrow">' + esc(eyebrow) + '</p>' : '') + '<h2 class="titulo-vitrine">' + (a ? esc(a) + ' ' : '') + '<span class="acento">' + esc(b) + '</span></h2>';
   }
 
-  function tabelaResumoGeral(s, r, pdf) {
+  function secResumo(s, r) {
     const R = r.resumo;
-    const txt = (t, tipo) => ({ v: t, tipo: tipo || 'informado', formula: '', pend: [] });
-    const p = s.plano;
-    const linhas = [
-      ['Categoria', txt(C.CATEGORIAS[p.categoria].nome), 'txt'],
-      ['Administradora', txt(p.administradora || 'Não selecionada', p.administradora ? 'informado' : 'na'), 'txt'],
-      ['Valor do crédito', R.credito, 'brl'],
-      ['Prazo', R.prazo, 'meses'],
-      ['Projeção de contemplação', txt('Mês ' + (p.mesContemplacao || '—'), 'estimado'), 'txt'],
-      ['Taxa de administração' + (R.taxaAdm.pct != null ? ' (' + C.fmtPct(R.taxaAdm.pct) + ')' : ''), R.taxaAdm, 'brl'],
-      ['Fundo de reserva' + (R.fundoReserva.pct != null ? ' (' + C.fmtPct(R.fundoReserva.pct) + ')' : ''), R.fundoReserva, 'brl'],
-      ['Adesão', R.adesao, 'brl'],
-      ['Seguro prestamista' + (p.seguroAtivo ? ' (' + C.fmtPct(C.num(p.seguroPct), 3) + ' a.m.)' : ''), R.seguro, 'brl'],
-      ['Modalidade de parcela', txt((C.MODALIDADES_PARCELA[s.parcela.modalidade] || {}).nome + (s.parcela.modalidade === 'outro' ? ' (' + C.fmtPct(r.redutorPct, 0) + ')' : '')), 'txt'],
-      ['Abatimento do lance', txt(p.abatimento === 'prazo' ? 'Prazo' : 'Parcela'), 'txt'],
-      ['Índice de reajuste', txt(textoIndice(p), C.isNum(C.taxaIndice(p)) ? 'informado' : 'pendente'), 'txt'],
-      ['Parcela inicial', R.parcelaInicial, 'brl'],
-      ['Parcela integral (sem adesão e seguro)', R.parcelaIntegral, 'brl']
-    ];
-    if (s.parcela.modalidade !== 'integral') linhas.push(['Parcela com redutor (sem adesão e seguro)', R.parcelaRedutor, 'brl']);
-    linhas.push(['Total estimado pago no plano (sem lance)', R.totalPago, 'brl']);
-    return '<div class="rolagem-x"><table class="tab"><thead><tr><th>Item</th><th>Valor</th><th>Tipo</th><th class="col-memo">Memória</th></tr></thead><tbody>' +
-      linhas.map((l, i) => linhaTabela(l[0], l[1], l[2], 'rg-' + i, pdf)).join('') + '</tbody></table></div>';
+    const kpi = (rot, val, formato, cls, sufixo) => '<div class="kpi' + (cls ? ' ' + cls : '') + '"><div class="kpi-rot">' + rot + '</div><div class="kpi-val">' + fmt(val, formato) + (sufixo && val && val.v != null ? '<small class="kpi-suf"> ' + sufixo + '</small>' : '') + '</div></div>';
+    return '<section class="bloco-res vitrine">' + tituloSecao('Resumo da', 'Proposta', 'Visão geral') + '<div class="kpis">' +
+      kpi('Crédito', R.credito, 'brl', 'kpi-destaque') +
+      kpi('Parcela inicial', R.parcelaInicial, 'brl', 'kpi-destaque') +
+      kpi('Total de taxas', R.taxaAno, 'pct', '', 'a.a.') +
+      kpi('Prazo', R.prazo, 'meses') +
+      '</div></section>';
   }
 
-  function cartaoForma(s, cen) {
+  function secCaracteristicas(s, r) {
+    const p = s.plano;
+    const t = C.taxaIndice(p);
+    const lista = [
+      ['Tipo do plano', C.CATEGORIAS[p.categoria].nome],
+      ['Administradora', p.administradora || 'Não selecionada'],
+      ['Taxa administrativa', C.isNum(C.num(p.taxaAdm)) ? C.fmtPct(C.num(p.taxaAdm)) : '—'],
+      ['Fundo de reserva', C.isNum(C.num(p.fundoReserva)) ? C.fmtPct(C.num(p.fundoReserva)) : '—'],
+      ['Fator redutor', s.parcela.modalidade === 'integral' ? 'Não' : 'Sim / ' + C.fmtPct(r.redutorPct, 0)],
+      ['Indexador de reajuste', C.nomeIndice(p) + (C.isNum(t) ? ' (' + C.fmtPct(t) + ' a.a.)' : '')],
+      ['Seguro prestamista', p.seguroAtivo ? 'Sim (' + C.fmtPct(C.num(p.seguroPct), 3) + ' a.m.)' : 'Não'],
+      ['Adesão', p.adesaoAtiva ? 'Sim (' + C.fmtPct(C.num(p.adesaoPct)) + ' em ' + (p.adesaoMeses || '—') + ' meses)' : 'Não'],
+      ['Abatimento do lance', p.abatimento === 'prazo' ? 'No prazo' : 'Na parcela'],
+      ['Projeção de contemplação', 'Mês ' + (p.mesContemplacao || '—')]
+    ];
+    return '<section class="bloco-res vitrine">' + tituloSecao('Características do', 'Plano', 'Condições') +
+      '<dl class="lista-info">' + lista.map(([k, v]) => '<div><dt>' + k + '</dt><dd>' + esc(v) + '</dd></div>').join('') + '</dl></section>';
+  }
+
+  function cartaoForma(s, cen, pdf) {
     const n = cen.nucleo;
-    let h = '<article class="forma"><header class="forma-topo"><span class="forma-icone">' + icone(cen.mod) + '</span><h3>' + esc(cen.nome) + '</h3></header>';
+    const id = 'forma-' + cen.mod;
+    const oculto = cen.mod !== 'sorteio' && !revelados.has(id);
+    let h = '<article class="forma"><header class="forma-topo"><span class="forma-icone">' + icone(cen.mod) + '</span><h3>' + esc(cen.nome) + '</h3>' +
+      (cen.mod !== 'sorteio' && !pdf ? botaoOlho(id, 'valores do ' + cen.nome.toLowerCase()) : '') + '</header>';
     if (!n.ok) return h + '<p class="nc forma-msg">' + esc(cen.motivo) + '</p></article>';
     const base = n.credBruto;
     const pct = (v) => (C.isNum(v) && C.isNum(base) && base > 0 ? '(' + C.fmtNum((v / base) * 100, 0) + '%) ' : '');
     const v = (x) => (C.isNum(x) ? C.fmtBRL(x) : '<span class="nc">Não calculado</span>');
     const linha = (rot, val, cls) => '<div class="forma-linha' + (cls ? ' ' + cls : '') + '"><span>' + rot + '</span><b>' + val + '</b></div>';
+    h += '<div class="forma-dados' + (oculto ? ' borrado' : '') + '"' + (oculto ? ' aria-hidden="true"' : '') + '>';
     h += linha('Crédito contratado', v(base), 'forte');
     h += linha('Lance embutido', pct(n.embutido) + v(n.embutido));
     h += linha('Lance recursos próprios', pct(n.proprios) + v(n.proprios));
@@ -545,94 +482,74 @@
     h += linha('Prazo remanescente', n.prazoRestante + ' meses');
     h += linha('Parcela pós-contemplação', v(n.parcelaPosAtual), 'acento-valor');
     h += linha('Saldo devedor', v(n.saldoDevedor));
-    const abat = s.plano.abatimento === 'prazo' ? 'Lance abatido no prazo: reduz a quantidade de parcelas.' : 'Lance abatido na parcela: reduz o valor das parcelas.';
-    h += '<p class="forma-nota">' + (cen.mod === 'sorteio' ? 'Sem lance: parcelas e prazo seguem a configuração do plano.' : abat) + '</p>';
-    return h + '</article>';
+    return h + '</div></article>';
   }
 
-  function secFormas(s, r) {
-    const mesC = C.num(s.plano.mesContemplacao);
+  function secFormas(s, r, pdf) {
+    const cens = pdf ? r.cenarios.filter((c) => c.mod === 'sorteio' || revelados.has('forma-' + c.mod)) : r.cenarios;
     return '<section class="bloco-res vitrine">' + tituloSecao('Formas de', 'Contemplação', 'Comparativo') +
-      '<p class="g-sub">Comparação na contemplação projetada no mês ' + (mesC || '—') + '. Valores a preços do mês da contemplação.</p>' +
-      '<div class="formas">' + r.cenarios.map((c) => cartaoForma(s, c)).join('') + '</div>' +
-      '<p class="aviso-inline">' + esc(C.MSG.mesHipotetico) + ' Nenhum lance assegura contemplação.</p></section>';
+      '<p class="g-sub">Comparação de Estratégias de Contemplação</p>' +
+      '<div class="formas">' + cens.map((c) => cartaoForma(s, c, pdf)).join('') + '</div></section>';
   }
 
-  function tabelaAlavancagem(a) {
+  function tabelaAlavancagem(a, pdf) {
+    const id = 'venda-' + a.mod;
+    const oculto = !revelados.has(id);
     const f = (x) => (C.isNum(x) ? C.fmtBRL(x) : '<span class="nc">n/c</span>');
     const cor = (x) => (C.isNum(x) ? (x >= 0 ? 'positivo' : 'negativo') : '');
-    return '<div class="alav"><h3>Alavancagem via <span class="acento">' + esc(a.nome.replace(/^Lance /, 'Lance ')) + '</span></h3><div class="rolagem-x"><table class="tab-alav"><thead><tr><th>Mês</th><th>Crédito</th><th>Parcela atual</th><th>Aporte</th><th>Vl. venda</th><th>Lucro (R$)</th><th>Rentabilidade (%)</th></tr></thead><tbody>' +
+    return '<div class="alav"><h3 class="alav-titulo">Alavancagem via <span class="acento">' + esc(a.nome) + '</span>' + (pdf ? '' : botaoOlho(id, 'cenário de venda via ' + a.nome.toLowerCase())) + '</h3>' +
+      '<div class="rolagem-x' + (oculto ? ' borrado' : '') + '"' + (oculto ? ' aria-hidden="true"' : '') + '><table class="tab-alav"><thead><tr><th>Mês</th><th>Crédito</th><th>Parcela atual</th><th>Aporte</th><th>Vl. venda</th><th>Lucro (R$)</th><th>Rentabilidade (%)</th></tr></thead><tbody>' +
       a.linhas.map((l) => '<tr><td>' + l.m + '</td><td>' + f(l.credito) + '</td><td>' + f(l.parcela) + '</td><td>' + f(l.aporte) + '</td><td>' + f(l.venda) + '</td><td class="' + cor(l.lucro) + '">' + f(l.lucro) + '</td><td class="' + cor(l.rentabilidade) + '">' + (C.isNum(l.rentabilidade) ? C.fmtPct(l.rentabilidade, 1) : '—') + '</td></tr>').join('') +
       '</tbody></table></div></div>';
   }
 
-  function secAlavancagem(r) {
-    if (!r.alavancagem.length) return '';
+  function secAlavancagem(r, pdf) {
+    const tabs = pdf ? r.alavancagem.filter((a) => revelados.has('venda-' + a.mod)) : r.alavancagem;
+    if (!tabs.length) return '';
     return '<section class="bloco-res vitrine">' + tituloSecao('Simulação de', 'Alavancagem', 'Cenários de venda') +
-      '<p class="g-sub">Se a carta for contemplada no mês indicado e vendida por ' + C.REGRAS.vendaPct + '% do crédito disponível. Aporte = parcelas pagas até o mês. Rentabilidade = lucro ÷ aporte.</p>' +
-      r.alavancagem.map(tabelaAlavancagem).join('') +
-      '<p class="aviso-inline">Cenários hipotéticos: não há garantia de contemplação, venda ou lucro.</p></section>';
+      tabs.map((a) => tabelaAlavancagem(a, pdf)).join('') + '</section>';
   }
 
-  const LINHAS_CEN = [
-    ['mes', 'Mês da contemplação (projetado)', 'txt'],
-    ['credito', 'Crédito contratado', 'brl'],
-    ['credBruto', 'Crédito na contemplação', 'brl'],
-    ['lance', 'Lance ofertado', 'brl'],
-    ['embutido', 'Lance embutido (sai do crédito)', 'brl'],
-    ['proprios', 'Recursos próprios do lance', 'brl'],
-    ['credLiquido', 'Crédito líquido disponível', 'brl'],
-    ['parcelaMes', 'Parcela no mês da contemplação', 'brl'],
-    ['qtdParcelas', 'Parcelas pagas até a contemplação', 'int'],
-    ['totalParcelas', 'Total pago em parcelas', 'brl'],
-    ['totalAportado', 'Total aportado pelo cliente', 'brl'],
-    ['venda', 'Valor estimado de venda (' + C.REGRAS.vendaPct + '%)', 'brl', 'destaque'],
-    ['resultado', 'Resultado estimado da venda', 'brl', 'destaque'],
-    ['rentabilidade', 'Rentabilidade sobre o aportado', 'pct', 'destaque'],
-    ['parcelaPos', 'Parcela após a contemplação', 'brl'],
-    ['prazoRestante', 'Parcelas restantes', 'int'],
-    ['saldoDevedor', 'Saldo devedor (valores do mês da contemplação)', 'brl'],
-    ['obrigacoes', 'Saldo de parcelas futuras', 'brl']
-  ];
-
-  function tabelaCenario(cen, id, pdf) {
-    let h = '<div class="cenario"><h3>' + esc(cen.titulo) + '</h3>';
-    if (!cen.ok) return h + '<p class="nc">' + esc(cen.motivo) + '</p></div>';
-    h += '<div class="rolagem-x"><table class="tab"><thead><tr><th>Item</th><th>Valor</th><th>Tipo</th><th class="col-memo">Memória</th></tr></thead><tbody>';
-    h += LINHAS_CEN.map(([k, rot, f, cls]) => linhaTabela(cls ? '<b>' + rot + '</b>' : rot, cen.linhas[k], f, id + '-' + k, pdf, cls)).join('');
-    h += '</tbody></table></div>';
-    return h + '</div>';
+  function cartaoAquisicao(a) {
+    let h = '<article class="forma aquisicao"><header class="forma-topo"><span class="forma-icone">' + icone(a.mod) + '</span><h3>' + esc(a.nome) + '</h3></header>';
+    if (!a.ok) return h + '<p class="nc forma-msg">Não calculado: ' + esc((a.pend || []).join('; ') || 'dados incompletos') + '.</p></article>';
+    const v = (x) => (C.isNum(x) ? C.fmtBRL(x) : '—');
+    const linha = (rot, val, cls) => '<div class="forma-linha' + (cls ? ' ' + cls : '') + '"><span>' + rot + '</span><b>' + val + '</b></div>';
+    h += '<div class="cet"><span>CET</span><b>' + (C.isNum(a.cetAno) ? C.fmtPct(a.cetAno, 2) + ' a.a.' : '—') + '</b><small>' + (C.isNum(a.cetMes) ? C.fmtPct(a.cetMes, 3) + ' a.m.' : '') + '</small></div>';
+    h += linha('Crédito para aquisição', v(a.credito), 'forte');
+    h += linha('Entrada (recursos próprios)', v(a.proprios));
+    h += linha('Parcelas até o fim do plano', v(a.totalParcelas));
+    h += linha('Total desembolsado', v(a.desembolso), 'realce');
+    h += linha('Custo da aquisição', v(a.custo) + (C.isNum(a.custoPct) ? ' (' + C.fmtPct(a.custoPct, 1) + ')' : ''));
+    h += linha('Prazo total', a.prazoEfetivo + ' meses');
+    return h + '</article>';
   }
 
-  function tabelaMensal(cen) {
-    const n = cen.nucleo;
-    if (!n.ok) return '<p class="nc">' + esc(cen.motivo) + '</p>';
-    const f = (x) => (C.isNum(x) ? C.fmtBRL(x) : '<span class="nc">n/c</span>');
-    return '<div class="rolagem"><table class="tab tab-num"><thead><tr><th>Mês</th><th>Crédito atualizado</th><th>Fundo comum</th><th>Taxa adm.</th><th>F. reserva</th><th>Adesão</th><th>Seguro</th><th>Parcela total</th><th>Situação</th></tr></thead><tbody>' +
-      n.linhas.map((l) => '<tr><td>' + l.m + '</td><td>' + f(l.credAtual) + '</td><td>' + f(l.fundoComum) + '</td><td>' + f(l.taxa) + '</td><td>' + f(l.fundo) + '</td><td>' + f(l.adesao) + '</td><td>' + f(l.seguro) + '</td><td>' + f(l.total) + '</td><td class="sit">' +
-        (l.encerrado ? 'Quitada pelo lance' : l.m === n.mesC ? 'Contemplação' : l.reduzido ? 'Redutor' : '') + '</td></tr>').join('') +
-      '</tbody></table></div>';
+  function secAquisicao(r) {
+    if (!r.aquisicao.length) return '';
+    return '<section class="bloco-res vitrine">' + tituloSecao('Simulação de', 'Aquisição', 'Cenário de aquisição') +
+      '<p class="g-sub">Uso da carta para comprar o imóvel: custo efetivo total (CET) com os reajustes das parcelas até o fim do plano.</p>' +
+      '<div class="formas">' + r.aquisicao.map(cartaoAquisicao).join('') + '</div></section>';
+  }
+
+  function cabecalho(s, pdf) {
+    const ident = [C.CATEGORIAS[s.plano.categoria].nome, s.plano.administradora].filter(Boolean).map(esc).join(' · ');
+    return '<header class="topo' + (pdf ? ' p-topo' : '') + '"><h1 class="titulo-proposta">Proposta de <span class="acento">Consórcio</span></h1>' +
+      '<p class="cliente">' + (s.plano.lead ? esc(s.plano.lead) : '<span class="mudo">Nome do cliente</span>') + '</p>' +
+      '<p class="sub-topo">' + ident + (pdf ? ' · Emitida em ' + new Date().toLocaleDateString('pt-BR') : '') + '</p></header>';
   }
 
   function desenhar(r) {
     const s = estado;
     graficos.clear();
-    let h = '<header class="topo"><div class="topo-linha"><button type="button" class="botao-menu" data-acao-menu aria-controls="sidebar">' + (document.body.classList.contains('menu-oculto') ? 'Mostrar menu' : 'Ocultar menu') + '</button>' +
-      '<div><p class="eyebrow">Proposta de consórcio</p><h1>' + (s.plano.lead ? esc(s.plano.lead) : 'Simulação de consórcio') + '</h1>' +
-      '<p class="sub-topo">' + esc(C.CATEGORIAS[s.plano.categoria].nome) + (s.plano.administradora ? ' · ' + esc(s.plano.administradora) : '') + '</p></div></div></header>';
-    h += secAlertas(r);
+    let h = cabecalho(s, false);
     h += secResumo(s, r);
-    h += secFormas(s, r);
-    h += secAlavancagem(r);
+    h += secCaracteristicas(s, r);
+    h += secFormas(s, r, false);
+    h += secAlavancagem(r, false);
+    h += secAquisicao(r);
     const proj = secProjecoes(r, false);
     if (proj) h += '<section class="bloco-res vitrine">' + tituloSecao('Cenários', 'futuros', 'Projeções') + proj + '</section>';
-    h += '<section class="bloco-res"><details class="memo-sec" data-id="detalhes"' + (abertos.has('detalhes') ? ' open' : '') + '><summary><h2>Detalhes do cálculo e premissas</h2></summary>' +
-      '<h3>Condições do plano</h3>' + tabelaResumoGeral(s, r, false) +
-      '<h3>Premissas usadas</h3><ul class="premissas">' + r.premissas.map((p) => '<li>' + esc(p) + '</li>').join('') + '</ul>' +
-      '<h3>Confirmar com a administradora</h3><ul class="premissas">' + r.pontosConfirmar.map((p) => '<li>' + esc(p) + '</li>').join('') + '</ul>' +
-      '<h3>Memória de cálculo por forma de contemplação</h3><div class="cenarios">' + r.cenarios.map((c, i) => tabelaCenario(c, 'c' + i, false)).join('') + '</div>' +
-      '<h3>Demonstrativo mensal</h3>' + r.cenarios.map((c, i) => '<details class="memo" data-id="mensal-' + i + '"' + (abertos.has('mensal-' + i) ? ' open' : '') + '><summary>' + esc(c.nome) + '</summary>' + tabelaMensal(c) + '</details>').join('') +
-      '</details></section>';
     h += '<footer class="rodape"><p>' + esc(AVISO) + '</p></footer>';
     const principal = $('#principal');
     const rolagem = principal.scrollTop;
@@ -651,16 +568,16 @@
   // Proposta em PDF (prévia → impressão do navegador → "Salvar como PDF")
   // ---------------------------------------------------------------------------
 
-  function montarProposta(s, r, lead) {
+  function montarProposta(s, r) {
     const data = new Date().toLocaleDateString('pt-BR');
-    const ident = [C.CATEGORIAS[s.plano.categoria].nome, s.plano.administradora && 'Administradora: ' + esc(s.plano.administradora)].filter(Boolean).join(' · ');
-    let h = '<header class="p-topo"><p class="eyebrow">Proposta de consórcio</p><h1>' + esc(lead) + '</h1><p>' + ident + ' · Emitida em ' + data + '</p></header>';
-    h += secResumo(s, r, true);
-    h += secFormas(s, r);
-    h += secAlavancagem(r);
+    let h = cabecalho(s, true);
+    h += secResumo(s, r);
+    h += secCaracteristicas(s, r);
+    h += secFormas(s, r, true);
+    h += secAlavancagem(r, true);
+    h += secAquisicao(r);
     const proj = secProjecoes(r, true);
     if (proj) h += '<section class="bloco-res vitrine">' + tituloSecao('Cenários', 'futuros', 'Projeções') + proj + '</section>';
-    h += '<section class="bloco-res"><h2>Premissas utilizadas</h2><ul>' + r.premissas.map((p) => '<li>' + esc(p) + '</li>').join('') + '</ul></section>';
     h += '<footer class="p-rodape"><p>' + esc(AVISO) + '</p></footer>';
     return { html: h, data };
   }
@@ -679,7 +596,7 @@
     const lead = String(s.plano.lead || '').trim();
     if (!lead) { avisar('Informe o nome completo antes de gerar a proposta.'); $('#f-lead').focus(); return; }
     const erros = r.validacoes.filter((v) => v.nivel === 'erro');
-    const prop = montarProposta(s, r, lead);
+    const prop = montarProposta(s, r);
     $('#proposta').innerHTML = prop.html;
     const nota = erros.length ? '<p class="aviso">Há ' + erros.length + ' erro(s) de preenchimento. Os itens afetados aparecem como "Não calculado".</p>' : '';
     const notaArtifact = window.MODO_ARTIFACT ? '<p class="nota">Nesta versão on-line a impressão está bloqueada. Para salvar em PDF, abra o arquivo <b>index.html</b> do simulador no navegador e use "Salvar em PDF".</p>' : '';

@@ -507,7 +507,7 @@
     R.credito = isNum(C) ? V(C, 'informado', 'Valor do crédito', 'Informado pelo consultor') : P('Crédito não informado');
     R.prazo = isNum(N) ? V(N, 'informado', 'Prazo total em meses', 'Informado pelo consultor') : P('Prazo não informado');
     R.taxaAdm = isNum(b.ta) && isNum(C) ? V((b.ta / 100) * C, 'calculado', 'Taxa adm. total = ' + fmtPct(b.ta) + ' × ' + fmtBRL(C), 'Percentual informado', { pct: b.ta }) : P('Taxa de administração ou crédito não informados');
-    R.taxaAno = isNum(b.ta) && isNum(N) && N > 0 ? V(b.ta / (N / 12), 'calculado', 'Taxa ao ano = taxa de administração ' + fmtPct(b.ta) + ' ÷ (' + N + ' meses ÷ 12)', 'Taxa de administração diluída pelos anos do plano') : P('Taxa de administração ou prazo não informados');
+    R.taxaAno = isNum(b.ta) && isNum(b.fr) && isNum(N) && N > 0 ? V((b.ta + b.fr) / (N / 12), 'calculado', 'Total de taxas ao ano = (taxa de administração ' + fmtPct(b.ta) + ' + fundo de reserva ' + fmtPct(b.fr) + ') ÷ (' + N + ' meses ÷ 12)', 'Taxas diluídas pelos anos do plano') : P('Taxa de administração, fundo de reserva ou prazo não informados');
     R.fundoReserva = isNum(b.fr) && isNum(C) ? V((b.fr / 100) * C, 'calculado', 'Fundo de reserva total = ' + fmtPct(b.fr) + ' × ' + fmtBRL(C), 'Percentual informado', { pct: b.fr }) : P('Fundo de reserva ou crédito não informados');
     if (p.adesaoAtiva) {
       const ap = num(p.adesaoPct), am = num(p.adesaoMeses);
@@ -578,6 +578,65 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Simulação de aquisição: CET do uso da carta para comprar o bem
+  // ---------------------------------------------------------------------------
+
+  /** Valor presente dos fluxos (índice 1 = mês 1) a uma taxa mensal. */
+  function vpl(fluxos, i) {
+    let v = 0;
+    for (let t = 1; t < fluxos.length; t++) v += fluxos[t] / Math.pow(1 + i, t);
+    return v;
+  }
+
+  /**
+   * Taxa interna de retorno mensal do ponto de vista do cliente que usa o crédito.
+   * Procura a menor taxa positiva em que o VPL muda de sinal e refina por bissecção.
+   */
+  function tirMensal(fluxos) {
+    let a = 0, fa = vpl(fluxos, 0);
+    if (Math.abs(fa) < 1e-6) return 0;
+    for (let i = 0.0005; i <= 0.2 + 1e-12; i += 0.0005) {
+      const fi = vpl(fluxos, i);
+      if ((fa < 0 && fi >= 0) || (fa > 0 && fi <= 0)) {
+        let lo = a, hi = i, flo = fa;
+        for (let k = 0; k < 80; k++) {
+          const mid = (lo + hi) / 2, fm = vpl(fluxos, mid);
+          if ((flo < 0 && fm < 0) || (flo > 0 && fm > 0)) { lo = mid; flo = fm; } else hi = mid;
+        }
+        return (lo + hi) / 2;
+      }
+      a = i; fa = fi;
+    }
+    return null;
+  }
+
+  /**
+   * Aquisição do bem com a carta: o cliente paga todas as parcelas (com reajustes até o fim do plano)
+   * e os recursos próprios do lance, e recebe o crédito disponível no mês da contemplação.
+   */
+  function aquisicao(s, mod) {
+    const n = nucleo(s, mod);
+    const out = { mod, nome: NOMES_MOD[mod], ok: false, pend: n.pend };
+    if (!n.ok || !isNum(n.totalPlano) || !isNum(n.credLiquido) || !isNum(n.proprios)) return out;
+    const fluxos = [0];
+    n.linhas.forEach((l) => fluxos.push(-(l.total || 0)));
+    fluxos[n.mesC] += n.credLiquido - n.proprios;
+    const i = tirMensal(fluxos);
+    out.ok = true;
+    out.mesC = n.mesC;
+    out.credito = n.credLiquido;
+    out.proprios = n.proprios;
+    out.totalParcelas = n.totalPlano;
+    out.prazoEfetivo = n.mesC + n.prazoRestante;
+    out.desembolso = n.totalPlano + n.proprios;
+    out.custo = out.desembolso - n.credLiquido;
+    out.custoPct = n.credLiquido > 0 ? (out.custo / n.credLiquido) * 100 : null;
+    out.cetMes = isNum(i) ? i * 100 : null;
+    out.cetAno = isNum(i) ? (Math.pow(1 + i, 12) - 1) * 100 : null;
+    return out;
+  }
+
+  // ---------------------------------------------------------------------------
   // Simulação de alavancagem: contemplação e venda em meses sucessivos
   // ---------------------------------------------------------------------------
 
@@ -623,6 +682,7 @@
       baseLance,
       projecoes: projecoes(s, nucleos),
       alavancagem: alavancagem(s),
+      aquisicao: modsAtivas(s).filter((m) => m !== 'sorteio').map((m) => aquisicao(s, m)),
       premissas: premissas(s),
       pontosConfirmar: pontosConfirmar(s),
       redutorPct: redutorPct(s.parcela),
@@ -632,7 +692,7 @@
 
   return {
     INDICES, CATEGORIAS, ADMINISTRADORAS, MODALIDADES_PARCELA, REGRAS, MSG, NOMES_MOD,
-    estadoPadrao, simular, nucleo, cenario, validar, fator, qtdReajustes, parcelaDataBase, redutorPct,
+    estadoPadrao, simular, nucleo, aquisicao, tirMensal, vpl, cenario, validar, fator, qtdReajustes, parcelaDataBase, redutorPct,
     nomeIndice, taxaIndice, indiceEstimado, lanceSobre,
     fmtBRL, fmtPct, fmtNum, num, isNum
   };

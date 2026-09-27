@@ -1,6 +1,6 @@
 # Especificação funcional — Simulador de Cartas de Consórcio Primárias
 
-Versão 2.1 · Implementação de referência: `index.html`, `js/calc.js` (motor de cálculo) e `js/app.js` (interface).
+Versão 2.2 · Implementação de referência: `index.html`, `js/calc.js` (motor de cálculo) e `js/app.js` (interface).
 
 > **Observação obrigatória:** a simulação depende dos dados do grupo, do contrato, das regras da administradora e das premissas inseridas. Nenhum valor é contratual. Não há garantia de contemplação, venda, lucro, valorização ou rentabilidade.
 
@@ -111,6 +111,20 @@ Cada cartão de lance lembra onde o lance é abatido (parcela ou prazo). No sort
 
 ---
 
+### 2.6 Ajustes de apresentação (v2.2)
+
+- **Menu lateral:** abaixo de "Gerar proposta (PDF)", apenas **Nova proposta** (volta aos valores iniciais) e **Salvar proposta** (baixa a proposta em arquivo .json; na versão on-line, exibe o conteúdo para copiar). O **Nome completo** fica fora dos blocos e sempre visível.
+- **Botão do menu:** ícone discreto, fixo no canto enquanto a página rola.
+- **Sem bloco de alertas** na proposta; os campos com erro continuam destacados no menu.
+- **Topo:** "Proposta de Consórcio" em destaque, com o nome do cliente abaixo.
+- **Resumo da Proposta:** Crédito, Parcela inicial, Total de taxas (a.a.) e Prazo, sem textos auxiliares.
+- **Características do Plano:** bloco próprio com tipo do plano (Imóvel/Veículo), administradora, taxa administrativa, fundo de reserva, fator redutor, indexador, seguro, adesão, abatimento e projeção de contemplação.
+- **Formas de Contemplação:** subtítulo "Comparação de Estratégias de Contemplação". Os cartões de lance (embutido, fixo e livre) têm um olho no canto superior direito; os dados começam desfocados e só aparecem após o clique. O sorteio fica sempre visível. Sem textos de legenda.
+- **Simulação de Alavancagem:** olho ao lado de cada título (Sorteio, Lance embutido); as tabelas começam ocultas a cada nova proposta.
+- **PDF:** leva apenas os cartões e tabelas que estiverem visíveis na tela.
+- **Simulação de Aquisição (novo):** um cartão por lance ativo com CET (a.a. e a.m.), crédito para aquisição, entrada (recursos próprios), parcelas até o fim do plano com reajuste, total desembolsado, custo da aquisição e prazo total.
+- **Removido:** bloco "Detalhes do cálculo e premissas".
+
 ## 3. Fórmulas
 
 Notação: C = crédito contratado; N = prazo; mC = mês da contemplação; r = redutor; F(m) = fator de reajuste.
@@ -137,7 +151,8 @@ Notação: C = crédito contratado; N = prazo; mC = mês da contemplação; r = 
 | **Valor de venda** | 20% × Crédito líquido |
 | **Resultado estimado** | Valor de venda − Total aportado |
 | Rentabilidade | Resultado ÷ Total aportado |
-| Taxa ao ano | Taxa de administração ÷ (prazo ÷ 12) |
+| Total de taxas (a.a.) | (Taxa de administração + fundo de reserva) ÷ (prazo ÷ 12) |
+| CET da aquisição | TIR mensal dos fluxos do cliente: −parcelas (com reajuste até o fim do plano), + crédito disponível − recursos próprios no mês da contemplação; CET a.a. = (1 + CET a.m.)¹² − 1 |
 | Lance embutido (forma própria) | Lance = embutido; recursos próprios = 0 |
 
 ---

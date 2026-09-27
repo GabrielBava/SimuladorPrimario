@@ -141,7 +141,6 @@ button, input, select, textarea { font: inherit; letter-spacing: inherit; }
 .topo { margin-bottom: 18px; }
 .topo-linha { display: flex; gap: 16px; align-items: flex-start; }
 .topo-linha h1 { margin: 0; }
-.botao-menu { flex: none; }
 .eyebrow { display: inline-flex; align-items: center; gap: 8px; color: var(--acento); font-weight: 500; font-size: .9rem; margin: 0 0 6px; }
 .eyebrow::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--acento); box-shadow: 0 0 0 3px var(--acento-suave); }
 .sub-topo { color: var(--suave); margin: 4px 0 0; }
@@ -175,8 +174,7 @@ button, input, select, textarea { font: inherit; letter-spacing: inherit; }
 .kpi-extra { font-size: .8rem; color: var(--suave); }
 .kpi-destaque { border-color: var(--acento-borda); background: linear-gradient(165deg, rgba(29, 192, 119, .1), rgba(29, 192, 119, .02)); }
 .kpi-destaque::before { content: ""; position: absolute; top: 0; left: 18px; right: 18px; height: 2px; border-radius: 2px; background: linear-gradient(90deg, var(--acento), transparent); }
-.kpi-destaque .kpi-val { color: var(--acento); font-size: clamp(1.35rem, 2.1vw, 2rem); }
-.kpi-val { overflow-wrap: anywhere; }
+.kpi-destaque .kpi-val { color: var(--acento); font-size: clamp(1.3rem, 1.85vw, 1.9rem); white-space: nowrap; }
 .lista-info { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0 28px; margin: 18px 0 0; }
 .lista-info div { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--borda-suave); font-size: .9rem; }
 .lista-info dt { color: var(--suave); }
@@ -378,3 +376,77 @@ button, input, select, textarea { font: inherit; letter-spacing: inherit; }
 .seg-opcoes label:hover span { color: var(--texto); background: var(--cartao-hover); }
 .seg-opcoes input:checked + span { background: var(--acento); color: var(--sobre-destaque); font-weight: 600; }
 .seg-opcoes input:focus-visible + span { outline: 2px solid var(--acento); outline-offset: 2px; }
+
+/* =========================================================================
+   Ajustes de apresentação (v7)
+   ========================================================================= */
+/* Nome do cliente sempre visível no menu */
+.campo-cliente { margin: 0 0 12px; padding: 12px; border: 1px solid var(--acento-borda); border-radius: 12px; background: var(--acento-suave); }
+.campo-cliente > span { color: var(--texto); }
+.campo-cliente input[type=text] { background: var(--campo); }
+
+/* Botão de ocultar/mostrar menu: leve e fixo durante a rolagem */
+.botao-menu {
+  position: fixed; top: 14px; left: 332px; z-index: 5;
+  width: 36px; height: 36px; padding: 0; display: grid; place-items: center;
+  border-radius: 10px; border: 1px solid var(--borda); cursor: pointer;
+  background: rgba(20, 20, 20, .72); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  color: var(--suave); transition: color .2s, border-color .2s, background .2s;
+}
+.botao-menu:hover { color: var(--acento); border-color: var(--acento-borda); background: rgba(20, 20, 20, .9); }
+.botao-menu svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; transition: transform .25s; }
+.menu-oculto .botao-menu { left: 14px; }
+.botao-menu .seta { transform-box: fill-box; transform-origin: center; }
+.menu-oculto .botao-menu .seta { transform: scaleX(-1); }
+.topo { padding-left: 44px; }
+
+/* Título da proposta */
+.titulo-proposta { font-size: clamp(2.1rem, 3.6vw, 3.1rem); line-height: 1.02; letter-spacing: -0.035em; margin: 0; }
+.cliente { font-family: var(--fonte-display); font-size: 1.3rem; font-weight: 500; margin: 10px 0 0; letter-spacing: -0.02em; }
+.cliente .mudo { color: var(--mudo); }
+.kpi-suf { font-family: var(--fonte); font-size: .8rem; font-weight: 500; color: var(--suave); letter-spacing: 0; }
+
+/* Olho: mostrar/ocultar dados ao cliente */
+.olho {
+  margin-left: auto; flex: none; width: 32px; height: 32px; padding: 0; display: grid; place-items: center;
+  border-radius: 9px; border: 1px solid var(--borda); background: transparent; color: var(--mudo); cursor: pointer;
+  transition: color .2s, border-color .2s, background .2s;
+}
+.olho:hover { color: var(--texto); border-color: var(--borda-forte); }
+.olho.ativo { color: var(--acento); border-color: var(--acento-borda); background: var(--acento-suave); }
+.olho svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.alav-titulo { display: flex; align-items: center; gap: 10px; }
+.alav-titulo .olho { margin-left: 4px; }
+.borrado { filter: blur(7px); user-select: none; pointer-events: none; transition: filter .3s; }
+.forma-dados, .rolagem-x { transition: filter .3s; }
+
+/* Simulação de aquisição */
+.cet { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; padding: 12px; margin-bottom: 6px; border-radius: 12px; background: var(--acento-suave); border: 1px solid var(--acento-borda); }
+.cet span { font-size: .78rem; font-weight: 600; color: var(--acento); letter-spacing: .06em; }
+.cet b { font-family: var(--fonte-display); font-size: 1.6rem; font-weight: 600; color: var(--acento); letter-spacing: -0.03em; }
+.cet small { font-family: var(--fonte-mono); color: var(--suave); font-size: .78rem; }
+
+@media (max-width: 900px) {
+  .botao-menu { left: auto; right: 14px; }
+  .menu-oculto .botao-menu { left: auto; }
+  .topo { padding-left: 0; padding-right: 44px; }
+}
+@media print {
+  .botao-menu, .olho { display: none !important; }
+  .topo { padding-left: 0; }
+}
+
+/* Resumo: cartões de destaque mais largos */
+.kpis { grid-template-columns: 1.35fr 1.35fr 1fr 1fr; }
+/* Espaço para o botão do menu quando o menu está oculto */
+.menu-oculto .principal { padding-left: 64px; }
+
+/* Telas estreitas (declarado por último para prevalecer) */
+@media (max-width: 900px) {
+  .app, .menu-oculto .app { grid-template-columns: 1fr; }
+  .menu-oculto .principal { padding-left: 16px; }
+  .kpis { grid-template-columns: 1fr 1fr; }
+  .kpi-destaque { grid-column: 1 / -1; }
+  .lista-info { grid-template-columns: 1fr; }
+  .titulo-proposta { font-size: 1.9rem; }
+}

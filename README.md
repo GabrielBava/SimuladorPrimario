@@ -10,7 +10,7 @@ Simulador para montar propostas de consórcio e apresentá-las a leads: condiç�
 2. Preencha as seções do menu lateral. Os resultados são atualizados automaticamente.
 3. Clique em **Gerar proposta (PDF)**, confira a prévia e clique em **Salvar em PDF**. O arquivo é sugerido como `Proposta_<Nome>_<data>`.
 
-Para ver o funcionamento, use **Carregar exemplo**. Os valores do exemplo são fictícios e não representam regras de nenhuma administradora.
+Na primeira abertura aparece um exemplo com valores fictícios. **Nova proposta** limpa os campos e **Salvar proposta** baixa a proposta em arquivo .json.
 
 ## Versão on-line
 
