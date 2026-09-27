@@ -12,6 +12,10 @@ Simulador para montar propostas de consórcio e apresentá-las a leads: condiç�
 
 Para ver o funcionamento, use **Carregar exemplo**. Os valores do exemplo são fictícios e não representam regras de nenhuma administradora.
 
+## Versão on-line
+
+`npm run build:online` gera `dist/simulador.html`, uma página única com CSS e JS embutidos, para publicação. Nessa versão a impressão e os downloads podem estar bloqueados pelo ambiente de hospedagem. Por isso, a proposta aparece em prévia e o JSON é exibido para copiar. Para salvar o PDF, use o `index.html` local.
+
 ## Estrutura
 
 | Arquivo | Conteúdo |

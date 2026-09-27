@@ -33,7 +33,8 @@
   }
 
   const padraoSalvo = () => mesclar(C.estadoPadrao(), ler(CHAVE_PADRAO) || {});
-  let estado = mesclar(C.estadoPadrao(), ler(CHAVE_ATUAL) || ler(CHAVE_PADRAO) || {});
+  const salvo = ler(CHAVE_ATUAL) || ler(CHAVE_PADRAO);
+  let estado = null; // definido na inicialização (exemplo ilustrativo na primeira visita)
   const abertos = new Set(['memo-geral']);
 
   function obter(caminho) { return caminho.split('.').reduce((o, k) => (o == null ? o : o[k]), estado); }
@@ -205,36 +206,87 @@
     return s;
   }
 
+  // Janelas dentro da página (confirm/alert do navegador podem estar bloqueados)
+  function janela(conteudo, botoes, larga) {
+    const fundo = document.createElement('div');
+    fundo.className = 'sobreposicao';
+    fundo.innerHTML = '<div class="janela' + (larga ? ' larga' : '') + '" role="dialog" aria-modal="true">' + conteudo + '<div class="janela-acoes"></div></div>';
+    const barra = fundo.querySelector('.janela-acoes');
+    const fechar = () => { fundo.remove(); document.removeEventListener('keydown', aoTeclar); };
+    const aoTeclar = (ev) => { if (ev.key === 'Escape') fechar(); };
+    botoes.forEach((b) => {
+      const el = document.createElement('button');
+      el.type = 'button';
+      el.textContent = b.texto;
+      if (b.primario) el.className = 'primario';
+      el.addEventListener('click', () => { if (b.acao && b.acao(fundo) === false) return; fechar(); });
+      barra.appendChild(el);
+    });
+    document.addEventListener('keydown', aoTeclar);
+    document.body.appendChild(fundo);
+    const foco = barra.querySelector('.primario') || barra.querySelector('button');
+    if (foco) foco.focus({ preventScroll: true });
+    return fundo;
+  }
+  function confirmar(msg, textoOk, aoConfirmar) {
+    janela('<p>' + esc(msg) + '</p>', [{ texto: 'Cancelar' }, { texto: textoOk, primario: true, acao: aoConfirmar }]);
+  }
+  function avisar(msg) {
+    const t = document.createElement('div');
+    t.className = 'aviso-toast';
+    t.setAttribute('role', 'status');
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 3500);
+  }
+
   const acoes = {
     nova() {
-      if (!confirm('Iniciar uma nova simulação? Os campos voltarão às configurações padrão salvas.')) return;
-      estado = padraoSalvo();
-      estado.plano.lead = '';
-      escreverCampos(); atualizar();
+      confirmar('Iniciar uma nova simulação? Os campos voltarão às configurações padrão salvas.', 'Iniciar nova simulação', () => {
+        estado = padraoSalvo();
+        estado.plano.lead = '';
+        escreverCampos(); atualizar();
+        avisar('Nova simulação iniciada com a configuração padrão.');
+      });
     },
     salvarPadrao() {
       const p = clone(estado);
       p.plano.lead = '';
-      alert(gravar(CHAVE_PADRAO, p) ? 'Configuração atual salva como padrão (sem o nome do lead).' : 'Não foi possível salvar neste navegador.');
+      avisar(gravar(CHAVE_PADRAO, p) ? 'Configuração atual salva como padrão (sem o nome do lead).' : 'Não foi possível salvar neste navegador.');
     },
     fabrica() {
-      if (!confirm('Restaurar o padrão de fábrica? O padrão salvo será apagado.')) return;
-      try { localStorage.removeItem(CHAVE_PADRAO); } catch (e) { /* sem armazenamento */ }
-      estado = C.estadoPadrao();
-      escreverCampos(); atualizar();
+      confirmar('Restaurar o padrão de fábrica? O padrão salvo será apagado e os campos serão limpos.', 'Restaurar', () => {
+        try { localStorage.removeItem(CHAVE_PADRAO); } catch (e) { /* sem armazenamento */ }
+        estado = C.estadoPadrao();
+        escreverCampos(); atualizar();
+        avisar('Padrão de fábrica restaurado.');
+      });
     },
     exemplo() {
-      if (!confirm('Carregar um exemplo com valores fictícios? Os campos atuais serão substituídos.')) return;
-      estado = exemplo();
-      escreverCampos(); atualizar();
+      confirmar('Carregar um exemplo com valores fictícios? Os campos atuais serão substituídos.', 'Carregar exemplo', () => {
+        estado = exemplo();
+        escreverCampos(); atualizar();
+      });
     },
     exportar() {
-      const blob = new Blob([JSON.stringify({ versao: 1, gerado: new Date().toISOString(), estado }, null, 2)], { type: 'application/json' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'simulacao_' + nomeArquivo(estado.plano.lead) + '.json';
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      const json = JSON.stringify({ versao: 1, gerado: new Date().toISOString(), estado }, null, 2);
+      if (!window.MODO_ARTIFACT) {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+        a.download = 'simulacao_' + nomeArquivo(estado.plano.lead) + '.json';
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        return;
+      }
+      janela('<h2>Dados da simulação (JSON)</h2><p class="nota">Copie o conteúdo e salve em um arquivo .json. Ele pode ser carregado depois em "Importar JSON".</p><textarea id="jsonExportado" readonly>' + esc(json) + '</textarea>', [
+        { texto: 'Fechar' },
+        { texto: 'Copiar', primario: true, acao: (j) => {
+          const ta = j.querySelector('textarea');
+          const selecionar = () => { ta.focus(); ta.select(); avisar('Texto selecionado: use Ctrl+C para copiar.'); };
+          try { navigator.clipboard.writeText(json).then(() => avisar('JSON copiado.'), selecionar); } catch (e) { selecionar(); }
+          return false;
+        } }
+      ], true);
     },
     importar() { $('#arquivoImportar').click(); },
     pdf: gerarPdf
@@ -247,7 +299,8 @@
       const dados = JSON.parse(t);
       estado = mesclar(C.estadoPadrao(), dados.estado || dados);
       escreverCampos(); atualizar();
-    }).catch(() => alert('Arquivo inválido.')).finally(() => { ev.target.value = ''; });
+      avisar('Simulação importada.');
+    }).catch(() => avisar('Arquivo inválido: selecione um JSON exportado pelo simulador.')).finally(() => { ev.target.value = ''; });
   }
 
   const nomeArquivo = (t) => (String(t || 'sem_nome').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w-]+/g, '_').replace(/^_+|_+$/g, '') || 'sem_nome');
@@ -461,13 +514,7 @@
   // Proposta em PDF (impressão do navegador → "Salvar como PDF")
   // ---------------------------------------------------------------------------
 
-  function gerarPdf() {
-    const s = estado;
-    const r = C.simular(s);
-    const lead = String(s.plano.lead || '').trim();
-    if (!lead) { alert('Informe o nome do lead ou a identificação da simulação antes de gerar a proposta.'); return; }
-    const erros = r.validacoes.filter((v) => v.nivel === 'erro');
-    if (erros.length && !confirm('Há ' + erros.length + ' erro(s) de preenchimento. Os itens afetados aparecerão como "Não calculado". Gerar mesmo assim?')) return;
+  function montarProposta(s, r, lead) {
     const data = new Date().toLocaleDateString('pt-BR');
     const ident = [s.plano.administradora && 'Administradora: ' + esc(s.plano.administradora), s.plano.grupo && 'Grupo: ' + esc(s.plano.grupo)].filter(Boolean).join(' · ');
     let h = '<header class="p-topo"><h1>Proposta de simulação — Consórcio</h1><p><b>Preparada para:</b> ' + esc(lead) + '</p><p><b>Data de emissão:</b> ' + data + (ident ? ' · ' + ident : '') + '</p></header>';
@@ -480,12 +527,30 @@
     h += '<h2>5. Premissas utilizadas</h2><ul>' + r.premissas.map((p) => '<li>' + esc(p) + '</li>').join('') + '</ul>';
     h += '<h2>6. Regras pendentes de confirmação com a administradora/grupo</h2>' + secPendentes(r);
     h += '<footer class="p-rodape"><p>' + esc(AVISO) + '</p><p>Mês de contemplação hipotético, sem garantia de ocorrência. Valores de venda são hipóteses, sem garantia de liquidez ou preço de mercado.</p></footer>';
-    $('#proposta').innerHTML = h;
+    return { html: h, data };
+  }
+
+  function imprimir(lead, data) {
     const tituloOriginal = document.title;
     document.title = 'Proposta_' + nomeArquivo(lead) + '_' + data.replace(/\//g, '-');
     const restaurar = () => { document.title = tituloOriginal; window.removeEventListener('afterprint', restaurar); };
     window.addEventListener('afterprint', restaurar);
     window.print();
+  }
+
+  function gerarPdf() {
+    const s = estado;
+    const r = C.simular(s);
+    const lead = String(s.plano.lead || '').trim();
+    if (!lead) { avisar('Informe o nome do lead ou a identificação da simulação antes de gerar a proposta.'); $('[data-k="plano.lead"]').focus(); return; }
+    const erros = r.validacoes.filter((v) => v.nivel === 'erro');
+    const prop = montarProposta(s, r, lead);
+    $('#proposta').innerHTML = prop.html;
+    const nota = erros.length ? '<p class="aviso">Há ' + erros.length + ' erro(s) de preenchimento. Os itens afetados aparecem como "Não calculado".</p>' : '';
+    const notaArtifact = window.MODO_ARTIFACT ? '<p class="nota">Nesta versão on-line a impressão está bloqueada. Para salvar em PDF, abra o arquivo <b>index.html</b> do simulador no navegador e use "Salvar em PDF".</p>' : '';
+    const botoes = [{ texto: 'Fechar' }];
+    if (!window.MODO_ARTIFACT) botoes.push({ texto: 'Salvar em PDF', primario: true, acao: () => { imprimir(lead, prop.data); } });
+    janela('<h2>Prévia da proposta</h2>' + nota + notaArtifact + '<div class="previa">' + prop.html + '</div>', botoes, true);
   }
 
   // ---------------------------------------------------------------------------
@@ -512,6 +577,7 @@
     });
   }
 
+  estado = salvo ? mesclar(C.estadoPadrao(), salvo) : exemplo();
   preencherIndices();
   ligarMenu();
   escreverCampos();
