@@ -335,3 +335,35 @@ button, input, select, textarea { font: inherit; letter-spacing: inherit; }
   .proposta .multiplos { grid-template-columns: 1fr 1fr; }
   .proposta .forma, .proposta .kpi { transform: none; }
 }
+
+/* =========================================================================
+   Menu lateral compacto
+   ========================================================================= */
+.app { grid-template-columns: 320px 1fr; }
+.sidebar { padding: 12px; font-size: .86rem; }
+.toolbar { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 12px; }
+.toolbar button { padding: 6px 8px; font-size: .76rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.toolbar .primario { grid-column: 1 / -1; padding: 9px 10px; font-size: .9rem; }
+.secao { border-radius: 12px; margin-bottom: 8px; }
+.secao > summary { padding: 10px 12px; font-size: .92rem; }
+.secao > :not(summary) { margin-left: 12px; margin-right: 12px; }
+.secao > :last-child { margin-bottom: 12px; }
+.f { margin: 8px 0; min-width: 0; }
+.f > span { font-size: .74rem; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.grid2 { gap: 0 8px; align-items: end; }
+.grid2 > * { min-width: 0; }
+.f input[type=text], .f input[type=number], .f select, .valor-travado {
+  height: 34px; padding: 0 9px; font-size: .84rem; border-radius: 8px; line-height: 32px;
+}
+.f select { padding-right: 4px; text-overflow: ellipsis; }
+.f input[data-moeda], .f input[type=number], .valor-travado { font-size: .8rem; }
+.valor-travado { min-height: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.f small, small.nota, p.nota { font-size: .72rem; margin-top: 4px; margin-bottom: 6px; line-height: 1.4; }
+.nota-lado { align-self: end; margin-bottom: 9px !important; }
+.chk { font-size: .84rem; gap: 7px; }
+.chk input { width: 15px; height: 15px; flex: none; }
+.linha-chk { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 10px 0 6px; }
+.chk-titulo { font-weight: 600; font-size: .88rem; margin: 2px 0 2px; }
+.chk-sub { margin: 2px 0 4px; color: var(--suave); }
+.bloco { margin-top: 8px; padding-top: 8px; }
+.sub { padding-left: 8px; }
