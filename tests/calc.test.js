@@ -7,6 +7,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.01, (msg || '') + ` es
 
 function base() {
   const s = Calc.estadoPadrao();
+  Object.assign(s.lances, { embutidoAtivo: false, fixoAtivo: false, fixoUsarEmbutido: false });
   Object.assign(s.plano, { lead: 'Teste', credito: 100000, prazo: 100, mesContemplacao: 12, taxaAdm: 20, fundoReserva: 2, indice: 'pre5' });
   return s;
 }
@@ -125,7 +126,7 @@ test('projeções só são calculadas quando selecionadas', () => {
   assert.deepEqual(Object.keys(Calc.simular(s).projecoes), []);
   s.projecoes = { parcelas: true, credito: true, rentabilidade: true };
   const p = Calc.simular(s).projecoes;
-  assert.equal(p.parcelas.length, 2);
+  assert.equal(p.parcelas.length, 3);
   assert.equal(p.credito.length, 9);
   near(p.rentabilidade[0].pontos[11].y, 20000 - 14640);
 });
@@ -135,4 +136,36 @@ test('validações de campos obrigatórios', () => {
   for (const c of ['plano.lead', 'plano.credito', 'plano.taxaAdm', 'plano.fundoReserva']) {
     assert.ok(v.some((x) => x.campo === c && x.nivel === 'erro'), c);
   }
+});
+
+test('lance embutido: sem recursos próprios e saldo devedor abatido pelo lance', () => {
+  const s = base();
+  s.lances.embutidoAtivo = true;
+  const sor = Calc.nucleo(s, 'sorteio');
+  const emb = Calc.nucleo(s, 'embutido');
+  near(emb.embutido, 25000);
+  near(emb.proprios, 0);
+  near(emb.credLiquido, 75000);
+  near(sor.saldoDevedor, 88 * 1220);
+  near(sor.saldoDevedor - emb.saldoDevedor, 25000);
+  near(emb.parcelaPosAtual * 88, emb.saldoDevedor, 'parcela × prazo = saldo (sem seguro)');
+});
+
+test('taxa ao ano = taxa de administração ÷ anos do plano', () => {
+  const s = base();
+  s.plano.prazo = 240;
+  near(Calc.simular(s).resumo.taxaAno.v, 1);
+});
+
+test('alavancagem: linhas a cada 6 meses até o mês 49', () => {
+  const s = base();
+  s.lances.embutidoAtivo = true;
+  const a = Calc.simular(s).alavancagem;
+  assert.deepEqual(a.map((x) => x.mod), ['sorteio', 'embutido']);
+  assert.deepEqual(a[0].linhas.map((l) => l.m), [1, 7, 13, 19, 25, 31, 37, 43, 49]);
+  const l1 = a[1].linhas[0];
+  near(l1.credito, 75000);
+  near(l1.aporte, 1220);
+  near(l1.venda, 15000);
+  near(l1.lucro, 15000 - 1220);
 });

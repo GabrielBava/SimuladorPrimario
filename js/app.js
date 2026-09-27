@@ -53,7 +53,14 @@
   const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const NOMES_TIPO = { informado: 'Informado', calculado: 'Calculado', estimado: 'Estimado', pendente: 'Pendente', na: 'Não aplicável' };
   const tag = (tipo) => '<span class="tag t-' + tipo + '">' + (NOMES_TIPO[tipo] || tipo) + '</span>';
-  const SERIE = { sorteio: 1, fixo: 2, livre: 3 };
+  const SERIE = { sorteio: 1, embutido: 1, fixo: 1, livre: 1 };
+  const ICONES = {
+    sorteio: '<rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1.3" class="ic-p"/><circle cx="15" cy="15" r="1.3" class="ic-p"/><circle cx="15" cy="9" r="1.3" class="ic-p"/><circle cx="9" cy="15" r="1.3" class="ic-p"/>',
+    embutido: '<path d="M12 4 3 8.5l9 4.5 9-4.5z"/><path d="m3 12.5 9 4.5 9-4.5"/><path d="m3 16.5 9 4.5 9-4.5"/>',
+    fixo: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1" class="ic-p"/>',
+    livre: '<path d="M4 18 10 12l3.5 3.5L20 8"/><path d="M15 8h5v5"/>'
+  };
+  const icone = (mod) => '<svg class="icone" viewBox="0 0 24 24" aria-hidden="true">' + ICONES[mod] + '</svg>';
 
   function fmt(val, formato) {
     if (val == null || val.v == null) {
@@ -156,8 +163,17 @@
       if (d.matches && d.matches('details[data-id]')) { if (d.open) abertos.add(d.dataset.id); else abertos.delete(d.dataset.id); }
     }, true);
     const pr = $('#principal');
+    pr.addEventListener('click', (ev) => { if (ev.target.closest('[data-acao-menu]')) alternarMenu(); });
     pr.addEventListener('pointermove', moverCursor);
     pr.addEventListener('pointerleave', esconderCursor, true);
+  }
+
+  function alternarMenu(forcar) {
+    const oculto = forcar != null ? forcar : !document.body.classList.contains('menu-oculto');
+    document.body.classList.toggle('menu-oculto', oculto);
+    const b = $('[data-acao-menu]');
+    if (b) b.textContent = oculto ? 'Mostrar menu' : 'Ocultar menu';
+    try { localStorage.setItem('simconsorcio.menuOculto', oculto ? '1' : '0'); } catch (e) { /* sem armazenamento */ }
   }
 
   // ---------------------------------------------------------------------------
@@ -307,7 +323,7 @@
     const todos = series.flatMap((s) => s.pontos.filter((p) => C.isNum(p.y)));
     if (!todos.length) return '<div class="grafico"><h3>' + esc(titulo) + '</h3><p class="nc">Não calculado: complete os dados do plano.</p></div>';
     const N = Math.max(...series.map((s) => s.pontos.length));
-    let ymin = Math.min(0, ...todos.map((p) => p.y)), ymax = Math.max(...todos.map((p) => p.y));
+    let ymin = opts.ymin != null ? opts.ymin : Math.min(0, ...todos.map((p) => p.y)), ymax = opts.ymax != null ? opts.ymax : Math.max(...todos.map((p) => p.y));
     const yt = ticks(ymin, ymax, 4);
     ymin = Math.min(ymin, yt[0]); ymax = Math.max(ymax, yt[yt.length - 1]);
     const sx = (x) => ML + ((x - 1) / Math.max(1, N - 1)) * (GW - ML - MR);
@@ -411,13 +427,24 @@
     $('.g-dica', caixa).hidden = true;
   }
 
+  /** Pequenos múltiplos: um gráfico por modalidade, na mesma escala. */
+  function multiplos(prefixo, titulo, subtitulo, series, opts, pdf) {
+    const vals = series.flatMap((s) => s.pontos.map((p) => p.y).filter(C.isNum));
+    if (!vals.length) return '<div class="grafico"><h3>' + esc(titulo) + '</h3><p class="nc">Não calculado: complete os dados do plano.</p></div>';
+    const yt = ticks(Math.min(0, ...vals), Math.max(...vals), 4);
+    const o = Object.assign({}, opts, { ymin: yt[0], ymax: yt[yt.length - 1] });
+    return '<div class="multiplos-bloco"><h3>' + esc(titulo) + '</h3><p class="g-sub">' + esc(subtitulo) + '</p><div class="multiplos">' +
+      series.map((s) => graficoLinhas(prefixo + '-' + s.mod, s.nome, '', [s], o, pdf)).join('') + '</div></div>';
+  }
+
   function secProjecoes(r, pdf) {
     const p = r.projecoes;
     const partes = [];
+    const pre = pdf ? 'p' : '';
     const mesC = C.num(estado.plano.mesContemplacao);
-    if (p.parcelas) partes.push(graficoLinhas((pdf ? 'p' : '') + 'g-parcelas', 'Parcelas mês a mês', 'Parcela total (plano, adesão e seguro) em cada cenário. Após a contemplação, a parcela reflete a recomposição do redutor e o abatimento do lance.', p.parcelas, { marcaX: mesC, marcaRotulo: 'contemplação' }, pdf));
-    if (p.credito) partes.push(graficoColunas((pdf ? 'p' : '') + 'g-credito', 'Crédito atualizado por ano', 'Crédito contratado reajustado anualmente pelo índice ' + C.nomeIndice(estado.plano) + (C.indiceEstimado(estado.plano) ? ' (taxa estimada)' : '') + '.', p.credito, pdf));
-    if (p.rentabilidade) partes.push(graficoLinhas((pdf ? 'p' : '') + 'g-rentab', 'Rentabilidade da venda conforme o mês de contemplação', 'Resultado estimado se a carta for contemplada no mês indicado e vendida por ' + C.REGRAS.vendaPct + '% do crédito líquido. Entre parênteses no detalhe: resultado ÷ total aportado.', p.rentabilidade, { marcaX: mesC, marcaRotulo: 'projeção', rotuloX: (x) => 'Contemplação no mês ' + x }, pdf));
+    if (p.parcelas) partes.push(multiplos(pre + 'g-parcelas', 'Parcelas mês a mês', 'Parcela total (plano, adesão e seguro) em cada forma de contemplação. Após a contemplação, a parcela reflete a recomposição do redutor e o abatimento do lance.', p.parcelas, { marcaX: mesC, marcaRotulo: 'contemplação' }, pdf));
+    if (p.credito) partes.push(graficoColunas(pre + 'g-credito', 'Crédito atualizado por ano', 'Crédito contratado reajustado anualmente pelo índice ' + C.nomeIndice(estado.plano) + (C.indiceEstimado(estado.plano) ? ' (taxa estimada)' : '') + '.', p.credito, pdf));
+    if (p.rentabilidade) partes.push(multiplos(pre + 'g-rentab', 'Rentabilidade da venda conforme o mês de contemplação', 'Lucro estimado se a carta for contemplada no mês indicado e vendida por ' + C.REGRAS.vendaPct + '% do crédito disponível. No detalhe, entre parênteses: lucro ÷ aporte.', p.rentabilidade, { marcaX: mesC, marcaRotulo: 'projeção', rotuloX: (x) => 'Contemplação no mês ' + x }, pdf));
     if (!partes.length) return '';
     return partes.join('') + '<p class="aviso-inline">Projeções estimadas, sem garantia de contemplação, venda ou rentabilidade.</p>';
   }
@@ -447,24 +474,32 @@
     return C.nomeIndice(p) + (C.isNum(t) ? ' — ' + C.fmtPct(t) + ' ao ano' + (C.indiceEstimado(p) ? ' (estimado)' : '') : ' — taxa não informada');
   }
 
-  function secResumo(s, r) {
+  function secResumo(s, r, pdf) {
     const R = r.resumo;
-    const temRed = s.parcela.modalidade !== 'integral';
-    const txt = (t, tipo) => ({ v: t, tipo: tipo || 'informado', formula: '', pend: [] });
-    let h = '<section class="bloco-res"><h2>Resumo</h2><div class="cartoes">';
-    h += cartao('Crédito contratado', R.credito, 'brl', 'r-cred');
-    h += cartao('Prazo total', R.prazo, 'meses', 'r-prazo');
-    h += cartao('Parcela inicial', R.parcelaInicial, 'brl', 'r-pini', ' <small>com adesão e seguro</small>');
-    h += cartao('Parcela integral', R.parcelaIntegral, 'brl', 'r-pint', ' <small>sem adesão e seguro</small>');
-    if (temRed) h += cartao('Parcela com redutor de ' + C.fmtPct(r.redutorPct, 0), R.parcelaRedutor, 'brl', 'r-pred', ' <small>até a contemplação</small>');
-    h += cartao('Taxa de administração', R.taxaAdm, 'brl', 'r-ta', R.taxaAdm.pct != null ? ' <small>' + C.fmtPct(R.taxaAdm.pct) + '</small>' : '');
-    h += cartao('Fundo de reserva', R.fundoReserva, 'brl', 'r-fr', R.fundoReserva.pct != null ? ' <small>' + C.fmtPct(R.fundoReserva.pct) + '</small>' : '');
-    h += cartao('Adesão', R.adesao, 'brl', 'r-ad', R.adesao.mensal != null ? ' <small>' + C.fmtBRL(R.adesao.mensal) + '/mês</small>' : '');
-    h += cartao('Seguro prestamista (mês 1)', R.seguro, 'brl', 'r-seg');
-    h += cartao('Reajuste anual', txt(textoIndice(s.plano), C.isNum(C.taxaIndice(s.plano)) ? 'informado' : 'pendente'), 'txt', 'r-idx');
-    h += cartao('Total estimado pago no plano', R.totalPago, 'brl', 'r-total', ' <small>sem lance</small>');
-    h += '</div></section>';
-    return h;
+    const p = s.plano;
+    const destaque = (rot, val, formato, extra) => '<div class="kpi kpi-destaque"><div class="kpi-rot">' + rot + '</div><div class="kpi-val">' + fmt(val, formato) + '</div>' + (extra ? '<div class="kpi-extra">' + extra + '</div>' : '') + '</div>';
+    const simples = (rot, val, formato, extra) => '<div class="kpi"><div class="kpi-rot">' + rot + '</div><div class="kpi-val">' + fmt(val, formato) + '</div>' + (extra ? '<div class="kpi-extra">' + extra + '</div>' : '') + '</div>';
+    const redutor = s.parcela.modalidade === 'integral' ? 'Não' : 'Sim / ' + C.fmtPct(r.redutorPct, 0);
+    const t = C.taxaIndice(p);
+    const lista = [
+      ['Taxa administrativa', C.isNum(C.num(p.taxaAdm)) ? C.fmtPct(C.num(p.taxaAdm)) : '—'],
+      ['Fundo de reserva', C.isNum(C.num(p.fundoReserva)) ? C.fmtPct(C.num(p.fundoReserva)) : '—'],
+      ['Fator redutor', redutor],
+      ['Indexador de reajuste', C.nomeIndice(p) + (C.isNum(t) ? ' (' + C.fmtPct(t) + ' a.a.' + (C.indiceEstimado(p) ? ', estimado' : '') + ')' : ' (taxa não informada)')],
+      ['Seguro prestamista', p.seguroAtivo ? 'Sim (' + C.fmtPct(C.num(p.seguroPct), 3) + ' a.m.)' : 'Não'],
+      ['Adesão', p.adesaoAtiva ? 'Sim (' + C.fmtPct(C.num(p.adesaoPct)) + ' em ' + (p.adesaoMeses || '—') + ' meses)' : 'Não'],
+      ['Projeção de contemplação', 'Mês ' + (p.mesContemplacao || '—')]
+    ];
+    return '<section class="bloco-res vitrine">' + tituloSecao('Resumo da', 'Proposta') + '<div class="kpis">' +
+      destaque('Crédito', R.credito, 'brl', esc(C.CATEGORIAS[p.categoria].nome)) +
+      destaque('Parcela inicial', R.parcelaInicial, 'brl', s.parcela.modalidade !== 'integral' ? 'com redutor de ' + C.fmtPct(r.redutorPct, 0) : '') +
+      simples('Taxa ao ano', R.taxaAno, 'pct', 'administração') +
+      simples('Prazo', R.prazo, 'meses') +
+      '</div><dl class="lista-info">' + lista.map(([k, v]) => '<div><dt>' + k + '</dt><dd>' + esc(v) + '</dd></div>').join('') + '</dl></section>';
+  }
+
+  function tituloSecao(a, b) {
+    return '<h2 class="titulo-vitrine">' + esc(a) + ' <span class="acento">' + esc(b) + '</span></h2>';
   }
 
   function tabelaResumoGeral(s, r, pdf) {
@@ -493,16 +528,48 @@
       linhas.map((l, i) => linhaTabela(l[0], l[1], l[2], 'rg-' + i, pdf)).join('') + '</tbody></table></div>';
   }
 
-  function textoModalidades(s, r) {
-    const l = s.lances;
-    const v = r.valoresLance;
-    const pctV = (pct, val) => (C.isNum(C.num(pct)) ? C.fmtPct(C.num(pct)) + ' — ' + C.fmtBRL(val) : 'percentual não informado');
-    let h = '<div class="modalidades">';
-    h += '<div class="modal"><h3>Sorteio</h3><p>Hipótese de contemplação por sorteio no mês projetado. Depende das assembleias e das regras do grupo; não há mês garantido.</p></div>';
-    if (l.embutidoAtivo) h += '<div class="modal"><h3>Lance embutido</h3><p><b>' + pctV(l.embutidoPct, v.embutido) + '</b></p><p>Parte do lance paga com o próprio crédito. Reduz o crédito disponível e não sai do bolso do cliente.</p></div>';
-    if (l.fixoAtivo) h += '<div class="modal"><h3>Lance fixo</h3><p><b>' + pctV(l.fixoPct, v.fixo) + '</b></p><p>Percentual definido pela administradora.' + (l.fixoUsarEmbutido && l.embutidoAtivo ? ' Usa o lance embutido; o restante é recurso próprio.' : ' Pago integralmente com recursos próprios.') + '</p></div>';
-    if (l.livreAtivo) h += '<div class="modal"><h3>Lance livre</h3><p><b>' + pctV(l.livrePct, v.livre) + '</b></p><p>Oferta escolhida pelo cliente, que concorre com os demais lances do grupo. Nenhum valor ofertado assegura contemplação.' + (l.livreUsarEmbutido && l.embutidoAtivo ? ' Usa o lance embutido; o restante é recurso próprio.' : '') + '</p></div>';
-    return h + '</div>';
+  function cartaoForma(s, cen) {
+    const n = cen.nucleo;
+    let h = '<article class="forma"><header class="forma-topo"><span class="forma-icone">' + icone(cen.mod) + '</span><h3>' + esc(cen.nome) + '</h3></header>';
+    if (!n.ok) return h + '<p class="nc forma-msg">' + esc(cen.motivo) + '</p></article>';
+    const base = n.credBruto;
+    const pct = (v) => (C.isNum(v) && C.isNum(base) && base > 0 ? '(' + C.fmtNum((v / base) * 100, 0) + '%) ' : '');
+    const v = (x) => (C.isNum(x) ? C.fmtBRL(x) : '<span class="nc">Não calculado</span>');
+    const linha = (rot, val, cls) => '<div class="forma-linha' + (cls ? ' ' + cls : '') + '"><span>' + rot + '</span><b>' + val + '</b></div>';
+    h += linha('Crédito contratado', v(base), 'forte');
+    h += linha('Lance embutido', pct(n.embutido) + v(n.embutido));
+    h += linha('Lance recursos próprios', pct(n.proprios) + v(n.proprios));
+    h += linha('Crédito disponível', v(n.credLiquido), 'realce');
+    h += linha('Prazo remanescente', n.prazoRestante + ' meses');
+    h += linha('Parcela pós-contemplação', v(n.parcelaPosAtual), 'acento-valor');
+    h += linha('Saldo devedor', v(n.saldoDevedor));
+    const abat = s.plano.abatimento === 'prazo' ? 'Lance abatido no prazo: reduz a quantidade de parcelas.' : 'Lance abatido na parcela: reduz o valor das parcelas.';
+    h += '<p class="forma-nota">' + (cen.mod === 'sorteio' ? 'Sem lance: parcelas e prazo seguem a configuração do plano.' : abat) + '</p>';
+    return h + '</article>';
+  }
+
+  function secFormas(s, r) {
+    const mesC = C.num(s.plano.mesContemplacao);
+    return '<section class="bloco-res vitrine">' + tituloSecao('Formas de', 'Contemplação') +
+      '<p class="g-sub">Comparação na contemplação projetada no mês ' + (mesC || '—') + '. Valores a preços do mês da contemplação.</p>' +
+      '<div class="formas">' + r.cenarios.map((c) => cartaoForma(s, c)).join('') + '</div>' +
+      '<p class="aviso-inline">' + esc(C.MSG.mesHipotetico) + ' Nenhum lance assegura contemplação.</p></section>';
+  }
+
+  function tabelaAlavancagem(a) {
+    const f = (x) => (C.isNum(x) ? C.fmtBRL(x) : '<span class="nc">n/c</span>');
+    const cor = (x) => (C.isNum(x) ? (x >= 0 ? 'positivo' : 'negativo') : '');
+    return '<div class="alav"><h3>Alavancagem via <span class="acento">' + esc(a.nome.replace(/^Lance /, 'Lance ')) + '</span></h3><div class="rolagem-x"><table class="tab-alav"><thead><tr><th>Mês</th><th>Crédito</th><th>Parcela atual</th><th>Aporte</th><th>Vl. venda</th><th>Lucro (R$)</th><th>Rentabilidade (%)</th></tr></thead><tbody>' +
+      a.linhas.map((l) => '<tr><td>' + l.m + '</td><td>' + f(l.credito) + '</td><td>' + f(l.parcela) + '</td><td>' + f(l.aporte) + '</td><td>' + f(l.venda) + '</td><td class="' + cor(l.lucro) + '">' + f(l.lucro) + '</td><td class="' + cor(l.rentabilidade) + '">' + (C.isNum(l.rentabilidade) ? C.fmtPct(l.rentabilidade, 1) : '—') + '</td></tr>').join('') +
+      '</tbody></table></div></div>';
+  }
+
+  function secAlavancagem(r) {
+    if (!r.alavancagem.length) return '';
+    return '<section class="bloco-res vitrine">' + tituloSecao('Simulação de', 'Alavancagem') +
+      '<p class="g-sub">Se a carta for contemplada no mês indicado e vendida por ' + C.REGRAS.vendaPct + '% do crédito disponível. Aporte = parcelas pagas até o mês. Rentabilidade = lucro ÷ aporte.</p>' +
+      r.alavancagem.map(tabelaAlavancagem).join('') +
+      '<p class="aviso-inline">Cenários hipotéticos: não há garantia de contemplação, venda ou lucro.</p></section>';
   }
 
   const LINHAS_CEN = [
@@ -522,11 +589,12 @@
     ['rentabilidade', 'Rentabilidade sobre o aportado', 'pct', 'destaque'],
     ['parcelaPos', 'Parcela após a contemplação', 'brl'],
     ['prazoRestante', 'Parcelas restantes', 'int'],
+    ['saldoDevedor', 'Saldo devedor (valores do mês da contemplação)', 'brl'],
     ['obrigacoes', 'Saldo de parcelas futuras', 'brl']
   ];
 
   function tabelaCenario(cen, id, pdf) {
-    let h = '<div class="cenario"><h3><i class="g-chave s' + SERIE[cen.mod] + '"></i>' + esc(cen.titulo) + '</h3>';
+    let h = '<div class="cenario"><h3>' + esc(cen.titulo) + '</h3>';
     if (!cen.ok) return h + '<p class="nc">' + esc(cen.motivo) + '</p></div>';
     h += '<div class="rolagem-x"><table class="tab"><thead><tr><th>Item</th><th>Valor</th><th>Tipo</th><th class="col-memo">Memória</th></tr></thead><tbody>';
     h += LINHAS_CEN.map(([k, rot, f, cls]) => linhaTabela(cls ? '<b>' + rot + '</b>' : rot, cen.linhas[k], f, id + '-' + k, pdf, cls)).join('');
@@ -547,19 +615,22 @@
   function desenhar(r) {
     const s = estado;
     graficos.clear();
-    let h = '<header class="topo"><h1>Simulação de consórcio' + (s.plano.lead ? ' — ' + esc(s.plano.lead) : '') + '</h1>' +
-      '<p class="sub-topo">' + esc(C.CATEGORIAS[s.plano.categoria].nome) + (s.plano.administradora ? ' · ' + esc(s.plano.administradora) : '') + '</p>' +
-      '<p class="aviso">' + esc(AVISO) + '</p></header>';
+    let h = '<header class="topo"><div class="topo-linha"><button type="button" class="botao-menu" data-acao-menu aria-controls="sidebar">' + (document.body.classList.contains('menu-oculto') ? 'Mostrar menu' : 'Ocultar menu') + '</button>' +
+      '<div><h1>' + (s.plano.lead ? esc(s.plano.lead) : 'Simulação de consórcio') + '</h1>' +
+      '<p class="sub-topo">' + esc(C.CATEGORIAS[s.plano.categoria].nome) + (s.plano.administradora ? ' · ' + esc(s.plano.administradora) : '') + '</p></div></div></header>';
     h += secAlertas(r);
     h += secResumo(s, r);
+    h += secFormas(s, r);
+    h += secAlavancagem(r);
     const proj = secProjecoes(r, false);
-    if (proj) h += '<section class="bloco-res"><h2>Projeções</h2>' + proj + '</section>';
-    h += '<section class="bloco-res"><h2>Estratégias de contemplação</h2>' + textoModalidades(s, r) + '<div class="cenarios">' + r.cenarios.map((c, i) => tabelaCenario(c, 'c' + i, false)).join('') + '</div>' +
-      '<p class="aviso-inline">' + esc(C.MSG.mesHipotetico) + ' ' + esc(C.MSG.estimado) + '</p></section>';
-    h += '<section class="bloco-res"><h2>Resumo geral da proposta</h2>' + tabelaResumoGeral(s, r, false) +
+    if (proj) h += '<section class="bloco-res vitrine">' + tituloSecao('', 'Projeções') + proj + '</section>';
+    h += '<section class="bloco-res"><details class="memo-sec" data-id="detalhes"' + (abertos.has('detalhes') ? ' open' : '') + '><summary><h2>Detalhes do cálculo e premissas</h2></summary>' +
+      '<h3>Condições do plano</h3>' + tabelaResumoGeral(s, r, false) +
       '<h3>Premissas usadas</h3><ul class="premissas">' + r.premissas.map((p) => '<li>' + esc(p) + '</li>').join('') + '</ul>' +
-      '<h3>Confirmar com a administradora</h3><ul class="premissas">' + r.pontosConfirmar.map((p) => '<li>' + esc(p) + '</li>').join('') + '</ul></section>';
-    h += '<section class="bloco-res"><h2>Demonstrativo mensal</h2>' + r.cenarios.map((c, i) => '<details class="memo" data-id="mensal-' + i + '"' + (abertos.has('mensal-' + i) ? ' open' : '') + '><summary>' + esc(c.nome) + '</summary>' + tabelaMensal(c) + '</details>').join('') + '</section>';
+      '<h3>Confirmar com a administradora</h3><ul class="premissas">' + r.pontosConfirmar.map((p) => '<li>' + esc(p) + '</li>').join('') + '</ul>' +
+      '<h3>Memória de cálculo por forma de contemplação</h3><div class="cenarios">' + r.cenarios.map((c, i) => tabelaCenario(c, 'c' + i, false)).join('') + '</div>' +
+      '<h3>Demonstrativo mensal</h3>' + r.cenarios.map((c, i) => '<details class="memo" data-id="mensal-' + i + '"' + (abertos.has('mensal-' + i) ? ' open' : '') + '><summary>' + esc(c.nome) + '</summary>' + tabelaMensal(c) + '</details>').join('') +
+      '</details></section>';
     h += '<footer class="rodape"><p>' + esc(AVISO) + '</p></footer>';
     const principal = $('#principal');
     const rolagem = principal.scrollTop;
@@ -581,15 +652,14 @@
   function montarProposta(s, r, lead) {
     const data = new Date().toLocaleDateString('pt-BR');
     const ident = [C.CATEGORIAS[s.plano.categoria].nome, s.plano.administradora && 'Administradora: ' + esc(s.plano.administradora)].filter(Boolean).join(' · ');
-    let h = '<header class="p-topo"><h1>Proposta de simulação — Consórcio</h1><p><b>Cliente:</b> ' + esc(lead) + '</p><p><b>Data de emissão:</b> ' + data + ' · ' + ident + '</p></header>';
-    h += '<p class="aviso">' + esc(AVISO) + '</p>';
-    h += '<h2>1. Condições do plano</h2>' + tabelaResumoGeral(s, r, true);
-    h += '<h2>2. Estratégias de contemplação</h2>' + textoModalidades(s, r) + r.cenarios.map((c, i) => tabelaCenario(c, 'p' + i, true)).join('');
-    let n = 3;
+    let h = '<header class="p-topo"><h1>Proposta de consórcio</h1><p><b>Cliente:</b> ' + esc(lead) + '</p><p><b>Data de emissão:</b> ' + data + ' · ' + ident + '</p></header>';
+    h += secResumo(s, r, true);
+    h += secFormas(s, r);
+    h += secAlavancagem(r);
     const proj = secProjecoes(r, true);
-    if (proj) h += '<h2>' + (n++) + '. Projeções</h2>' + proj;
-    h += '<h2>' + (n++) + '. Premissas utilizadas</h2><ul>' + r.premissas.map((p) => '<li>' + esc(p) + '</li>').join('') + '</ul>';
-    h += '<footer class="p-rodape"><p>' + esc(AVISO) + '</p><p>Mês de contemplação projetado, sem garantia de ocorrência. O valor de venda é uma hipótese, sem garantia de liquidez ou preço de mercado.</p></footer>';
+    if (proj) h += '<section class="bloco-res vitrine">' + tituloSecao('', 'Projeções') + proj + '</section>';
+    h += '<section class="bloco-res"><h2>Premissas utilizadas</h2><ul>' + r.premissas.map((p) => '<li>' + esc(p) + '</li>').join('') + '</ul></section>';
+    h += '<footer class="p-rodape"><p>' + esc(AVISO) + '</p></footer>';
     return { html: h, data };
   }
 
@@ -642,6 +712,7 @@
   }
 
   estado = salvo ? mesclar(C.estadoPadrao(), salvo) : exemplo();
+  try { if (localStorage.getItem('simconsorcio.menuOculto') === '1') document.body.classList.add('menu-oculto'); } catch (e) { /* sem armazenamento */ }
   preencherSelects();
   ligarMenu();
   escreverCampos();

@@ -86,11 +86,11 @@
       },
       parcela: { modalidade: 'integral', redutorOutro: null },
       lances: {
-        embutidoAtivo: false,
+        embutidoAtivo: true,
         embutidoPct: REGRAS.embutidoPctPadrao,
-        fixoAtivo: false,
+        fixoAtivo: true,
         fixoPct: REGRAS.fixoPctPadrao,
-        fixoUsarEmbutido: false,
+        fixoUsarEmbutido: true,
         livreAtivo: false,
         livrePct: null,
         livreUsarEmbutido: false
@@ -176,12 +176,16 @@
     return { ok: pend.length === 0, pend, C, N, ta, fr, r: isNum(r) ? r : 0 };
   }
 
-  /** Valores do lance de uma modalidade ('fixo' | 'livre') sobre uma base de crédito. */
+  /**
+   * Valores do lance de uma modalidade sobre uma base de crédito.
+   * 'embutido': o lance é composto só pelo lance embutido (sem recursos próprios).
+   * 'fixo' | 'livre': percentual da modalidade; com "Usar embutido", o embutido é descontado do total.
+   */
   function lanceSobre(s, mod, base) {
     const l = s.lances;
-    const pct = num(mod === 'fixo' ? l.fixoPct : l.livrePct);
-    const usar = (mod === 'fixo' ? l.fixoUsarEmbutido : l.livreUsarEmbutido) && l.embutidoAtivo;
     const pctE = num(l.embutidoPct);
+    const pct = mod === 'embutido' ? pctE : num(mod === 'fixo' ? l.fixoPct : l.livrePct);
+    const usar = mod === 'embutido' || ((mod === 'fixo' ? l.fixoUsarEmbutido : l.livreUsarEmbutido) && l.embutidoAtivo);
     const out = { pct, pctEmbutido: usar ? pctE : 0, usaEmbutido: usar, total: null, embutido: null, proprios: null, limitado: false };
     if (!isNum(pct) || !isNum(base)) return out;
     out.total = (pct / 100) * base;
@@ -250,16 +254,20 @@
       linhas.push(l);
     }
 
-    // Lance e abatimento
+    // Saldo devedor na contemplação: parcelas restantes (fundo comum, taxa e fundo de reserva) a valores do mês da contemplação
     const credBruto = F[mesC] === null ? null : C * F[mesC];
+    const fC = F[mesC];
+    const posLinhas = linhas.slice(mesC);
+    const saldoAntes = posLinhas.every((l) => isNum(l.plano)) && isNum(fC) ? posLinhas.reduce((a, l) => a + l.plano * fC / l.f, 0) : null;
+
+    // Lance e abatimento
     let lance = null;
     if (mod !== 'sorteio') {
       lance = lanceSobre(s, mod, credBruto);
-      if (!isNum(lance.pct)) res.pend.push('Percentual do lance ' + (mod === 'fixo' ? 'fixo' : 'livre') + ' não informado');
+      if (!isNum(lance.pct)) res.pend.push('Percentual do ' + NOMES_MOD[mod].toLowerCase() + ' não informado');
       if (lance.usaEmbutido && !isNum(lance.pctEmbutido)) res.pend.push('Percentual do lance embutido não informado');
       const pos = linhas.slice(mesC);
       if (isNum(lance.total) && lance.total > 0 && pos.length && pos.every((l) => isNum(l.plano))) {
-        const fC = F[mesC];
         const bases = pos.map((l) => l.plano * fC / l.f); // saldo a valores do mês da contemplação
         const saldo = bases.reduce((a, x) => a + x, 0);
         if (p.abatimento === 'prazo') {
@@ -306,6 +314,10 @@
     res.parcelaPos = mesC < N ? (posAtivas.length ? posAtivas[0].total : 0) : null;
     res.prazoRestante = linhas.slice(mesC).filter((l) => !l.encerrado).length;
     res.obrigacoes = mesC < N ? soma(mesC + 1, N, 'total') : 0;
+    // Valores pós-contemplação a preços do mês da contemplação (sem reajustes futuros)
+    res.saldoDevedor = isNum(saldoAntes) ? Math.max(0, saldoAntes - (isNum(res.lanceTotal) ? res.lanceTotal : 0)) : null;
+    const pa = posAtivas[0];
+    res.parcelaPosAtual = mesC >= N ? null : !pa ? 0 : [pa.plano, pa.adesao, pa.seguro].every(isNum) && isNum(fC) ? pa.plano * fC / pa.f + pa.adesao + pa.seguro * fC / pa.f : null;
     res.totalPlano = soma(1, N, 'total');
     linhas.forEach((l) => l.pend.forEach((x) => res.pend.push(x)));
     res.pend = Array.from(new Set(res.pend));
@@ -321,12 +333,13 @@
   // Cenário com memória de cálculo (tabelas de cenários)
   // ---------------------------------------------------------------------------
 
+  const NOMES_MOD = { sorteio: 'Sorteio', embutido: 'Lance embutido', fixo: 'Lance fixo', livre: 'Lance livre' };
   const TITULOS = {
-    sorteio: 'Tabela A — Contemplação por sorteio',
-    fixo: 'Tabela B — Contemplação por lance fixo',
-    livre: 'Tabela C — Contemplação por lance livre'
+    sorteio: 'Contemplação por sorteio',
+    embutido: 'Contemplação por lance embutido',
+    fixo: 'Contemplação por lance fixo',
+    livre: 'Contemplação por lance livre'
   };
-  const NOMES_MOD = { sorteio: 'Sorteio', fixo: 'Lance fixo', livre: 'Lance livre' };
 
   function cenario(s, mod) {
     const n = nucleo(s, mod);
@@ -351,7 +364,7 @@
     } else {
       const lc = n.lance;
       const base = fmtBRL(n.credBruto);
-      L.lance = val(lc.total, 'estimado', 'Lance = ' + fmtPct(lc.pct) + ' × crédito na contemplação ' + base, mod === 'fixo' ? 'Percentual do lance fixo (administradora)' : 'Percentual ofertado no lance livre');
+      L.lance = val(lc.total, 'estimado', 'Lance = ' + fmtPct(lc.pct) + ' × crédito na contemplação ' + base, mod === 'fixo' ? 'Percentual do lance fixo (administradora)' : mod === 'embutido' ? 'Lance composto só pelo embutido' : 'Percentual ofertado no lance livre');
       L.embutido = lc.usaEmbutido
         ? val(lc.embutido, 'estimado', 'Lance embutido = ' + fmtPct(lc.pctEmbutido) + ' × ' + base + (lc.limitado ? ' (limitado ao valor total do lance)' : ''), 'Percentual do lance embutido (administradora)')
         : V(0, 'calculado', '"Usar embutido" desmarcado para esta modalidade', 'Configuração');
@@ -379,6 +392,7 @@
       L.parcelaPos = val(n.parcelaPos, 'estimado', 'Parcela do mês ' + (mesC + 1) + (s.parcela.modalidade !== 'integral' ? ', com a diferença do redutor diluída nas parcelas restantes' : '') + (mod !== 'sorteio' ? ', após o abatimento do lance' : ''), 'Demonstrativo mensal', { nota: notaAbat });
       L.prazoRestante = V(n.prazoRestante, 'estimado', 'Parcelas restantes após a contemplação' + (mod !== 'sorteio' && p.abatimento === 'prazo' ? ' (prazo reduzido pelo lance)' : ''), 'Demonstrativo mensal');
     }
+    L.saldoDevedor = val(n.saldoDevedor, 'estimado', 'Saldo devedor = saldo das parcelas restantes a valores do mês da contemplação ' + fmtBRL(n.saldoDevedor + (n.lanceTotal || 0)) + ' − lance ' + fmtBRL(n.lanceTotal || 0), 'Sem reajustes futuros; exclui seguro');
     L.obrigacoes = val(n.obrigacoes, 'estimado', 'Σ parcelas projetadas após a contemplação', 'Demonstrativo mensal', { nota: 'Em caso de venda, as parcelas restantes passam ao comprador, conforme as regras da administradora.' });
     return res;
   }
@@ -493,6 +507,7 @@
     R.credito = isNum(C) ? V(C, 'informado', 'Valor do crédito', 'Informado pelo consultor') : P('Crédito não informado');
     R.prazo = isNum(N) ? V(N, 'informado', 'Prazo total em meses', 'Informado pelo consultor') : P('Prazo não informado');
     R.taxaAdm = isNum(b.ta) && isNum(C) ? V((b.ta / 100) * C, 'calculado', 'Taxa adm. total = ' + fmtPct(b.ta) + ' × ' + fmtBRL(C), 'Percentual informado', { pct: b.ta }) : P('Taxa de administração ou crédito não informados');
+    R.taxaAno = isNum(b.ta) && isNum(N) && N > 0 ? V(b.ta / (N / 12), 'calculado', 'Taxa ao ano = taxa de administração ' + fmtPct(b.ta) + ' ÷ (' + N + ' meses ÷ 12)', 'Taxa de administração diluída pelos anos do plano') : P('Taxa de administração ou prazo não informados');
     R.fundoReserva = isNum(b.fr) && isNum(C) ? V((b.fr / 100) * C, 'calculado', 'Fundo de reserva total = ' + fmtPct(b.fr) + ' × ' + fmtBRL(C), 'Percentual informado', { pct: b.fr }) : P('Fundo de reserva ou crédito não informados');
     if (p.adesaoAtiva) {
       const ap = num(p.adesaoPct), am = num(p.adesaoMeses);
@@ -528,6 +543,7 @@
 
   function modsAtivas(s) {
     const l = ['sorteio'];
+    if (s.lances.embutidoAtivo) l.push('embutido');
     if (s.lances.fixoAtivo) l.push('fixo');
     if (s.lances.livreAtivo) l.push('livre');
     return l;
@@ -562,6 +578,30 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Simulação de alavancagem: contemplação e venda em meses sucessivos
+  // ---------------------------------------------------------------------------
+
+  const PASSO_ALAVANCAGEM = 6;
+  const ATE_ALAVANCAGEM = 49;
+
+  function alavancagem(s) {
+    const b = basicos(s);
+    if (!b.ok) return [];
+    const mods = ['sorteio'];
+    if (s.lances.embutidoAtivo) mods.push('embutido');
+    const meses = [];
+    for (let m = 1; m <= Math.min(ATE_ALAVANCAGEM, b.N); m += PASSO_ALAVANCAGEM) meses.push(m);
+    return mods.map((mod) => ({
+      mod,
+      nome: NOMES_MOD[mod],
+      linhas: meses.map((m) => {
+        const n = nucleo(s, mod, m);
+        return { m, credito: n.credLiquido, parcela: n.parcelaMes, aporte: n.totalAportado, venda: n.venda, lucro: n.resultado, rentabilidade: n.rentabilidade };
+      })
+    }));
+  }
+
+  // ---------------------------------------------------------------------------
   // Função principal
   // ---------------------------------------------------------------------------
 
@@ -582,6 +622,7 @@
       valoresLance: { embutido: valor(s.lances.embutidoPct), fixo: valor(s.lances.fixoPct), livre: valor(s.lances.livrePct) },
       baseLance,
       projecoes: projecoes(s, nucleos),
+      alavancagem: alavancagem(s),
       premissas: premissas(s),
       pontosConfirmar: pontosConfirmar(s),
       redutorPct: redutorPct(s.parcela),

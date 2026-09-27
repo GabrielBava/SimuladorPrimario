@@ -1,6 +1,6 @@
 # Especificação funcional — Simulador de Cartas de Consórcio Primárias
 
-Versão 2.0 · Implementação de referência: `index.html`, `js/calc.js` (motor de cálculo) e `js/app.js` (interface).
+Versão 2.1 · Implementação de referência: `index.html`, `js/calc.js` (motor de cálculo) e `js/app.js` (interface).
 
 > **Observação obrigatória:** a simulação depende dos dados do grupo, do contrato, das regras da administradora e das premissas inseridas. Nenhum valor é contratual. Não há garantia de contemplação, venda, lucro, valorização ou rentabilidade.
 
@@ -12,7 +12,7 @@ Versão 2.0 · Implementação de referência: `index.html`, `js/calc.js` (motor
 |---|---|
 | **Barra de ferramentas** | Gerar proposta (PDF) · Nova simulação · Salvar como padrão · Carregar exemplo · Exportar/Importar JSON · Restaurar padrão de fábrica |
 | **Menu lateral (esquerda)** | Dados do plano · Modalidade Parcela · Estratégias de Contemplação · Projeções |
-| **Resultados (direita)** | Aviso geral → Alertas → Resumo → Projeções (gráficos selecionados) → Estratégias de contemplação (tabelas por modalidade) → Resumo geral, premissas e pontos a confirmar → Demonstrativo mensal |
+| **Resultados (direita)** | Botão Ocultar/Mostrar menu → Alertas → Resumo da Proposta → Formas de Contemplação → Simulação de Alavancagem → Projeções (gráficos selecionados) → Detalhes do cálculo e premissas (recolhível: condições, premissas, memória por forma de contemplação e demonstrativo mensal) |
 | **Proposta em PDF** | Abre uma prévia na tela. Na versão local, "Salvar em PDF" usa a impressão do navegador, com arquivo sugerido `Proposta_<Nome>_<data>`. Contém o nome do cliente e os dados da proposta, incluindo os gráficos selecionados. |
 
 Todo valor exibido tem uma etiqueta de tipo (**Informado**, **Calculado**, **Estimado**, **Pendente**, **Não aplicável**) e uma **memória de cálculo** com fórmula, valores e origem.
@@ -76,6 +76,39 @@ Caixas de seleção: **Parcelas**, **Crédito atualizado**, **Rentabilidade (ven
 
 Cada gráfico tem legenda, detalhe ao passar o mouse e uma tabela "ver dados".
 
+### 2.5 Apresentação ao cliente
+
+**Menu lateral:** pode ser ocultado pelo botão "Ocultar menu" no topo dos resultados. A escolha fica salva no navegador.
+
+**Resumo da Proposta:** quatro cartões, Crédito e Parcela inicial em destaque, mais Taxa ao ano e Prazo. Abaixo, em lista: taxa administrativa (%), fundo de reserva (%), fator redutor (Não, ou Sim / %), indexador de reajuste, seguro prestamista, adesão e projeção de contemplação.
+
+**Formas de Contemplação:** um cartão por forma (Sorteio sempre; Lance embutido, Lance fixo e Lance livre quando ativados), na mesma ordem de linhas:
+
+| Linha | Cálculo |
+|---|---|
+| Crédito contratado | Crédito atualizado no mês da contemplação |
+| Lance embutido | (%) e valor do embutido |
+| Lance recursos próprios | (%) e valor pago pelo cliente |
+| **Crédito disponível** | Crédito − embutido |
+| Prazo remanescente | Parcelas após a contemplação (reduzido quando o abatimento é por prazo) |
+| Parcela pós-contemplação | 1ª parcela após a contemplação, a preços do mês da contemplação |
+| Saldo devedor | Saldo das parcelas restantes (fundo comum, taxa e fundo de reserva) − lance, a preços do mês da contemplação |
+
+Cada cartão de lance lembra onde o lance é abatido (parcela ou prazo). No sorteio, parcelas e prazo seguem o plano.
+
+**Simulação de Alavancagem:** tabelas "via Sorteio" e "via Lance embutido", com contemplação e venda hipotéticas nos meses 1, 7, 13, … 49.
+
+| Coluna | Cálculo |
+|---|---|
+| Crédito | Crédito disponível no mês (atualizado, menos o embutido) |
+| Parcela atual | Parcela do mês |
+| Aporte | Soma das parcelas pagas até o mês |
+| Vl. venda | 20% × crédito disponível |
+| Lucro (R$) | Vl. venda − aporte |
+| Rentabilidade (%) | Lucro ÷ aporte |
+
+**Gráficos:** um gráfico por forma de contemplação (pequenos múltiplos na mesma escala), para evitar cores difíceis de distinguir.
+
 ---
 
 ## 3. Fórmulas
@@ -104,6 +137,8 @@ Notação: C = crédito contratado; N = prazo; mC = mês da contemplação; r = 
 | **Valor de venda** | 20% × Crédito líquido |
 | **Resultado estimado** | Valor de venda − Total aportado |
 | Rentabilidade | Resultado ÷ Total aportado |
+| Taxa ao ano | Taxa de administração ÷ (prazo ÷ 12) |
+| Lance embutido (forma própria) | Lance = embutido; recursos próprios = 0 |
 
 ---
 
