@@ -105,6 +105,7 @@
     $$('[data-k]').forEach((el) => {
       const v = obter(el.dataset.k);
       if (el.type === 'checkbox') el.checked = !!v;
+      else if (el.type === 'radio') el.checked = el.value === String(v);
       else if (el.hasAttribute('data-moeda')) el.value = C.isNum(v) ? C.fmtBRL(v) : '';
       else el.value = v == null ? '' : v;
     });
@@ -141,6 +142,7 @@
     const aoAlterar = (ev) => {
       const el = ev.target;
       if (!el.dataset.k) return;
+      if (el.type === 'radio' && !el.checked) return;
       if (el.hasAttribute('data-moeda') && ev.type === 'change') return;
       definir(el.dataset.k, lerCampo(el));
       if (el.dataset.k === 'plano.categoria') {
