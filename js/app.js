@@ -222,8 +222,9 @@
   const acoes = {
     nova() {
       confirmar('Iniciar uma nova proposta? Os campos voltarão aos valores iniciais.', 'Nova proposta', () => {
+        const whatsapp = estado.contato.whatsapp;
         estado = C.estadoPadrao();
-        estado.plano.lead = '';
+        estado.contato.whatsapp = whatsapp; // contato do especialista é mantido entre propostas
         revelados.clear();
         escreverCampos(); atualizar();
         $('#f-lead').focus();
@@ -568,18 +569,116 @@
   // Proposta em PDF (prévia → impressão do navegador → "Salvar como PDF")
   // ---------------------------------------------------------------------------
 
+  // ---------------------------------------------------------------------------
+  // Proposta em PDF: 3 páginas A4 com layout próprio
+  // ---------------------------------------------------------------------------
+
+  function numeroWhatsapp(txt) {
+    let d = String(txt || '').replace(/\D/g, '');
+    if (!d) return '';
+    if (d.length <= 11) d = '55' + d;
+    return d;
+  }
+
+  function pdfLinhas(pares) {
+    return '<div class="pdf-linhas">' + pares.map(([rot, val, cls]) => '<div class="pdf-linha' + (cls ? ' ' + cls : '') + '"><span>' + rot + '</span><b>' + val + '</b></div>').join('') + '</div>';
+  }
+
+  function pdfTitulo(a, b) {
+    return '<h2 class="pdf-h2">' + esc(a) + ' <span class="acento">' + esc(b) + '</span></h2>';
+  }
+
+  function pdfPagina(n, total, s, corpo) {
+    return '<section class="pdf-pagina"><div class="pdf-corpo">' + corpo + '</div>' +
+      '<footer class="pdf-rodape"><span>' + esc(s.plano.lead) + '</span><span>' + n + ' / ' + total + '</span></footer></section>';
+  }
+
+  function pdfCartaoForma(n, mod) {
+    const v = (x) => (C.isNum(x) ? C.fmtBRL(x) : '—');
+    const base = n.credBruto;
+    const pct = (x) => (C.isNum(x) && C.isNum(base) && base > 0 ? '(' + C.fmtNum((x / base) * 100, 0) + '%) ' : '');
+    let h = '<article class="pdf-cartao"><header><span class="forma-icone">' + icone(mod) + '</span><h3>' + esc(C.NOMES_MOD[mod]) + '</h3></header>';
+    if (!n.ok) return h + '<p class="nc">Não calculado</p></article>';
+    return h + pdfLinhas([
+      ['Crédito contratado', v(base), 'forte'],
+      ['Lance embutido', pct(n.embutido) + v(n.embutido)],
+      ['Recursos próprios', pct(n.proprios) + v(n.proprios)],
+      ['Crédito disponível', v(n.credLiquido), 'realce'],
+      ['Prazo remanescente', n.prazoRestante + ' meses'],
+      ['Parcela pós-contemplação', v(n.parcelaPosAtual), 'acento-valor'],
+      ['Saldo devedor', v(n.saldoDevedor)]
+    ]) + '</article>';
+  }
+
   function montarProposta(s, r) {
     const data = new Date().toLocaleDateString('pt-BR');
-    let h = cabecalho(s, true);
-    h += secResumo(s, r);
-    h += secCaracteristicas(s, r);
-    h += secFormas(s, r, true);
-    h += secAlavancagem(r, true);
-    h += secAquisicao(r);
-    const proj = secProjecoes(r, true);
-    if (proj) h += '<section class="bloco-res vitrine">' + tituloSecao('Cenários', 'futuros', 'Projeções') + proj + '</section>';
-    h += '<footer class="p-rodape"><p>' + esc(AVISO) + '</p></footer>';
-    return { html: h, data };
+    const p = s.plano;
+    const R = r.resumo;
+    const t = C.taxaIndice(p);
+    const total = 3;
+    const nucleo = (mod) => { const c = r.cenarios.find((x) => x.mod === mod); return c ? c.nucleo : null; };
+
+    // Página 1: dados da proposta, características e formas de contemplação
+    const kpi = (rot, val, formato, cls, suf) => '<div class="pdf-kpi' + (cls ? ' ' + cls : '') + '"><span>' + rot + '</span><b>' + fmt(val, formato) + (suf && val && val.v != null ? '<small> ' + suf + '</small>' : '') + '</b></div>';
+    const ident = [C.CATEGORIAS[p.categoria].nome, p.administradora].filter(Boolean).map(esc).join(' · ');
+    let p1 = '<header class="pdf-topo"><p class="eyebrow">Emitida em ' + data + '</p><h1>Proposta de <span class="acento">Consórcio</span></h1>' +
+      '<p class="pdf-cliente">' + esc(p.lead) + '</p><p class="pdf-ident">' + ident + '</p></header>';
+    p1 += '<div class="pdf-kpis">' + kpi('Crédito', R.credito, 'brl', 'destaque') + kpi('Parcela inicial', R.parcelaInicial, 'brl', 'destaque') + kpi('Total de taxas', R.taxaAno, 'pct', '', 'a.a.') + kpi('Prazo', R.prazo, 'meses') + '</div>';
+    const carac = [
+      ['Tipo do plano', C.CATEGORIAS[p.categoria].nome],
+      ['Administradora', p.administradora || '—'],
+      ['Taxa administrativa', C.isNum(C.num(p.taxaAdm)) ? C.fmtPct(C.num(p.taxaAdm)) : '—'],
+      ['Fundo de reserva', C.isNum(C.num(p.fundoReserva)) ? C.fmtPct(C.num(p.fundoReserva)) : '—'],
+      ['Fator redutor', s.parcela.modalidade === 'integral' ? 'Não' : 'Sim / ' + C.fmtPct(r.redutorPct, 0)],
+      ['Indexador de reajuste', C.nomeIndice(p) + (C.isNum(t) ? ' (' + C.fmtPct(t) + ' a.a.)' : '')],
+      ['Seguro prestamista', p.seguroAtivo ? 'Sim (' + C.fmtPct(C.num(p.seguroPct), 3) + ' a.m.)' : 'Não'],
+      ['Adesão', p.adesaoAtiva ? 'Sim (' + C.fmtPct(C.num(p.adesaoPct)) + ' em ' + (p.adesaoMeses || '—') + ' meses)' : 'Não'],
+      ['Abatimento do lance', p.abatimento === 'prazo' ? 'No prazo' : 'Na parcela'],
+      ['Projeção de contemplação', 'Mês ' + (p.mesContemplacao || '—')]
+    ];
+    p1 += '<div class="pdf-bloco">' + pdfTitulo('Características do', 'Plano') + '<dl class="pdf-carac">' + carac.map(([k, v]) => '<div><dt>' + k + '</dt><dd>' + esc(v) + '</dd></div>').join('') + '</dl></div>';
+    const mods1 = ['sorteio', 'embutido', 'fixo'].filter((m) => nucleo(m));
+    p1 += '<div class="pdf-bloco">' + pdfTitulo('Formas de', 'Contemplação') + '<div class="pdf-grade c' + mods1.length + '">' + mods1.map((m) => pdfCartaoForma(nucleo(m), m)).join('') + '</div></div>';
+
+    // Página 2: panorama de venda e alavancagem
+    const f = (x) => (C.isNum(x) ? C.fmtBRL(x) : '—');
+    const cor = (x) => (C.isNum(x) ? (x >= 0 ? 'positivo' : 'negativo') : '');
+    let p2 = '<header class="pdf-topo menor"><p class="eyebrow">Cenários de venda</p><h1>Panorama de <span class="acento">Alavancagem</span></h1>' +
+      '<p class="pdf-ident">Venda da carta contemplada estimada em ' + C.REGRAS.vendaPct + '% do crédito disponível. Aporte: parcelas pagas até o mês.</p></header>';
+    r.alavancagem.forEach((a) => {
+      p2 += '<div class="pdf-bloco">' + pdfTitulo('Alavancagem via', a.nome) +
+        '<table class="pdf-tab"><thead><tr><th>Mês</th><th>Crédito</th><th>Parcela atual</th><th>Aporte</th><th>Vl. venda</th><th>Lucro (R$)</th><th>Rentab.</th></tr></thead><tbody>' +
+        a.linhas.map((l) => '<tr><td>' + l.m + '</td><td>' + f(l.credito) + '</td><td>' + f(l.parcela) + '</td><td>' + f(l.aporte) + '</td><td>' + f(l.venda) + '</td><td class="' + cor(l.lucro) + '">' + f(l.lucro) + '</td><td class="' + cor(l.rentabilidade) + '">' + (C.isNum(l.rentabilidade) ? C.fmtPct(l.rentabilidade, 1) : '—') + '</td></tr>').join('') +
+        '</tbody></table></div>';
+    });
+    if (!r.alavancagem.length) p2 += '<p class="nc">Não calculado: complete os dados do plano.</p>';
+
+    // Página 3: aquisição, contato e avisos
+    let p3 = '<header class="pdf-topo menor"><p class="eyebrow">Cenário de aquisição</p><h1>Simulação de <span class="acento">Aquisição</span></h1>' +
+      '<p class="pdf-ident">Uso da carta para comprar o ' + (p.categoria === 'veiculo' ? 'veículo' : 'imóvel') + ': custo efetivo total (CET) com os reajustes das parcelas até o fim do plano.</p></header>';
+    const aq = r.aquisicao;
+    p3 += '<div class="pdf-grade c' + Math.max(1, aq.length) + '">' + aq.map((a) => {
+      let h = '<article class="pdf-cartao"><header><span class="forma-icone">' + icone(a.mod) + '</span><h3>' + esc(a.nome) + '</h3></header>';
+      if (!a.ok) return h + '<p class="nc">Não calculado</p></article>';
+      h += '<div class="pdf-cet"><span>CET</span><b>' + (C.isNum(a.cetAno) ? C.fmtPct(a.cetAno, 2) : '—') + '<small> a.a.</small></b><em>' + (C.isNum(a.cetMes) ? C.fmtPct(a.cetMes, 3) + ' a.m.' : '') + '</em></div>';
+      return h + pdfLinhas([
+        ['Crédito para aquisição', f(a.credito), 'forte'],
+        ['Entrada (recursos próprios)', f(a.proprios)],
+        ['Parcelas até o fim do plano', f(a.totalParcelas)],
+        ['Total desembolsado', f(a.desembolso), 'realce'],
+        ['Custo da aquisição', f(a.custo)],
+        ['Prazo total', a.prazoEfetivo + ' meses']
+      ]) + '</article>';
+    }).join('') + '</div>';
+    if (!aq.length) p3 += '<p class="nc">Ative um lance para ver o cenário de aquisição.</p>';
+    const wa = numeroWhatsapp(s.contato && s.contato.whatsapp);
+    const msg = encodeURIComponent('Olá! Recebi a proposta de consórcio' + (p.lead ? ' de ' + p.lead : '') + ' e gostaria de conversar.');
+    p3 += '<div class="pdf-cta"><div><h3>Vamos dar o próximo passo?</h3><p>Fale com o especialista para tirar dúvidas e seguir com a proposta.</p></div>' +
+      (wa ? '<a class="pdf-botao" href="https://wa.me/' + wa + '?text=' + msg + '">Falar no WhatsApp</a>' : '<span class="pdf-botao inativo">Falar no WhatsApp</span>') + '</div>';
+    p3 += '<div class="pdf-disclaimer"><b>Importante</b><p>' + esc(AVISO) + ' Mês de contemplação projetado, sem garantia de ocorrência. Valores de venda e CET são estimativas baseadas nas premissas informadas e no índice de reajuste estimado.</p></div>';
+
+    const html = pdfPagina(1, total, s, p1) + pdfPagina(2, total, s, p2) + pdfPagina(3, total, s, p3);
+    return { html, data, semWhatsapp: !wa };
   }
 
   function imprimir(lead, data) {
@@ -598,7 +697,8 @@
     const erros = r.validacoes.filter((v) => v.nivel === 'erro');
     const prop = montarProposta(s, r);
     $('#proposta').innerHTML = prop.html;
-    const nota = erros.length ? '<p class="aviso">Há ' + erros.length + ' erro(s) de preenchimento. Os itens afetados aparecem como "Não calculado".</p>' : '';
+    const nota = (erros.length ? '<p class="aviso">Há ' + erros.length + ' erro(s) de preenchimento. Os itens afetados aparecem como "Não calculado".</p>' : '') +
+      (prop.semWhatsapp ? '<p class="aviso">Informe o WhatsApp do especialista no menu para ativar o botão da página 3.</p>' : '');
     const notaArtifact = window.MODO_ARTIFACT ? '<p class="nota">Nesta versão on-line a impressão está bloqueada. Para salvar em PDF, abra o arquivo <b>index.html</b> do simulador no navegador e use "Salvar em PDF".</p>' : '';
     const botoes = [{ texto: 'Fechar' }];
     if (!window.MODO_ARTIFACT) botoes.push({ texto: 'Salvar em PDF', primario: true, acao: () => { imprimir(lead, prop.data); } });

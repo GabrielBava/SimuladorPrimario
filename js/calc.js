@@ -95,7 +95,8 @@
         livrePct: null,
         livreUsarEmbutido: false
       },
-      projecoes: { parcelas: false, credito: false, rentabilidade: false }
+      projecoes: { parcelas: false, credito: false, rentabilidade: false },
+      contato: { whatsapp: '' }
     };
   }
 

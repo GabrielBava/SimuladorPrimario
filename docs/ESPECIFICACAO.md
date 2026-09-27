@@ -1,6 +1,6 @@
 # Especificação funcional — Simulador de Cartas de Consórcio Primárias
 
-Versão 2.2 · Implementação de referência: `index.html`, `js/calc.js` (motor de cálculo) e `js/app.js` (interface).
+Versão 2.3 · Implementação de referência: `index.html`, `js/calc.js` (motor de cálculo) e `js/app.js` (interface).
 
 > **Observação obrigatória:** a simulação depende dos dados do grupo, do contrato, das regras da administradora e das premissas inseridas. Nenhum valor é contratual. Não há garantia de contemplação, venda, lucro, valorização ou rentabilidade.
 
@@ -121,9 +121,20 @@ Cada cartão de lance lembra onde o lance é abatido (parcela ou prazo). No sort
 - **Características do Plano:** bloco próprio com tipo do plano (Imóvel/Veículo), administradora, taxa administrativa, fundo de reserva, fator redutor, indexador, seguro, adesão, abatimento e projeção de contemplação.
 - **Formas de Contemplação:** subtítulo "Comparação de Estratégias de Contemplação". Os cartões de lance (embutido, fixo e livre) têm um olho no canto superior direito; os dados começam desfocados e só aparecem após o clique. O sorteio fica sempre visível. Sem textos de legenda.
 - **Simulação de Alavancagem:** olho ao lado de cada título (Sorteio, Lance embutido); as tabelas começam ocultas a cada nova proposta.
-- **PDF:** leva apenas os cartões e tabelas que estiverem visíveis na tela.
 - **Simulação de Aquisição (novo):** um cartão por lance ativo com CET (a.a. e a.m.), crédito para aquisição, entrada (recursos próprios), parcelas até o fim do plano com reajuste, total desembolsado, custo da aquisição e prazo total.
 - **Removido:** bloco "Detalhes do cálculo e premissas".
+
+### 2.7 Proposta em PDF (3 páginas A4)
+
+| Página | Conteúdo |
+|---|---|
+| 1 | "Proposta de Consórcio", nome do cliente, tipo do plano e data; Crédito, Parcela inicial, Total de taxas (a.a.) e Prazo; Características do Plano; Formas de Contemplação (Sorteio, Lance embutido e Lance fixo) |
+| 2 | Panorama de Alavancagem: tabelas de venda via Sorteio e via Lance embutido |
+| 3 | Simulação de Aquisição com CET por lance; chamada para ação com botão "Falar no WhatsApp"; bloco de avisos |
+
+- As páginas têm tamanho fixo (210 × 297 mm), com rodapé com nome do cliente e numeração.
+- O PDF traz todos os dados, independentemente dos olhos da tela, que servem só para a apresentação.
+- O botão abre `https://wa.me/55<número>` com uma mensagem pronta. O número vem do campo **WhatsApp do especialista**, no menu, que é mantido ao iniciar uma nova proposta. Sem número, o botão aparece desativado e a prévia avisa.
 
 ## 3. Fórmulas
 
