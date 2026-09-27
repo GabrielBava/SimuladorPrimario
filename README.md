@@ -8,7 +8,7 @@ Simulador para montar propostas de consórcio e apresentá-las a leads: condiç�
 
 1. Abra `index.html` no navegador. Não há instalação nem servidor; funciona também offline.
 2. Preencha as seções do menu lateral. Os resultados são atualizados automaticamente.
-3. Clique em **Gerar proposta (PDF)** e, na janela de impressão, escolha **Salvar como PDF**. O arquivo é sugerido como `Proposta_<Lead>_<data>`.
+3. Clique em **Gerar proposta (PDF)**, confira a prévia e clique em **Salvar em PDF**. O arquivo é sugerido como `Proposta_<Nome>_<data>`.
 
 Para ver o funcionamento, use **Carregar exemplo**. Os valores do exemplo são fictícios e não representam regras de nenhuma administradora.
 

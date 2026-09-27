@@ -25,6 +25,9 @@
   --sobre-destaque: #ffffff;
   --contorno-tag: rgba(20, 30, 50, .10);
   --sombra: rgba(15, 25, 45, .45);
+  --serie-1: #2a78d6;
+  --serie-2: #eb6834;
+  --serie-3: #1baf7a;
   color-scheme: light;
   font-size: 14px;
 }
@@ -38,6 +41,7 @@
     --t-informado: #22324a; --t-calculado: #1f3a2a; --t-estimado: #3d3218; --t-pendente: #45221f; --t-na: #2a2f39;
     --campo: #12151b; --cabecalho: #232833; --codigo: #151920; --cartao: #1f242d; --linha-destaque: #212a38;
     --sobre-destaque: #0f1420; --contorno-tag: rgba(255, 255, 255, .08); --sombra: rgba(0, 0, 0, .6);
+    --serie-1: #3987e5; --serie-2: #d95926; --serie-3: #199e70;
   }
 }
 :root[data-theme="dark"] {
@@ -48,6 +52,7 @@
   --t-informado: #22324a; --t-calculado: #1f3a2a; --t-estimado: #3d3218; --t-pendente: #45221f; --t-na: #2a2f39;
   --campo: #12151b; --cabecalho: #232833; --codigo: #151920; --cartao: #1f242d; --linha-destaque: #212a38;
   --sobre-destaque: #0f1420; --contorno-tag: rgba(255, 255, 255, .08); --sombra: rgba(0, 0, 0, .6);
+  --serie-1: #3987e5; --serie-2: #d95926; --serie-3: #199e70;
 }
 
 * { box-sizing: border-box; }
@@ -166,6 +171,34 @@ button.mini { padding: 2px 8px; border: 1px solid var(--borda); background: var(
 .rodape { font-size: .8rem; color: var(--suave); }
 
 .proposta { display: none; }
+.sub-topo { color: var(--suave); margin: 0 0 4px; }
+.valor-travado { display: block; padding: 5px 7px; border: 1px dashed var(--borda); border-radius: 4px; background: var(--cabecalho); color: var(--texto); font-variant-numeric: tabular-nums; min-height: 30px; }
+.rolagem-x { overflow-x: auto; }
+.tab .num, .valor-travado, .c-val { font-variant-numeric: tabular-nums; }
+
+/* Gráficos */
+.grafico { margin: 8px 0 18px; }
+.grafico h3 { margin-bottom: 2px; }
+.g-sub { color: var(--suave); font-size: .82rem; margin: 0 0 6px; max-width: 70ch; }
+.g-area { position: relative; }
+.g-area svg { width: 100%; height: auto; display: block; overflow: visible; }
+.g-grade { stroke: var(--borda); stroke-width: 1; }
+.g-zero { stroke: var(--suave); stroke-width: 1; }
+.g-marca { stroke: var(--suave); stroke-width: 1; opacity: .7; }
+.g-rotulo { fill: var(--suave); font-size: 11px; }
+.g-valor { fill: var(--texto); font-size: 11px; font-weight: 600; }
+.g-linha { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.g-linha.s1 { stroke: var(--serie-1); } .g-linha.s2 { stroke: var(--serie-2); } .g-linha.s3 { stroke: var(--serie-3); }
+.g-ponto { stroke: var(--painel); stroke-width: 2; }
+.g-ponto.s1, .g-barra.s1 { fill: var(--serie-1); } .g-ponto.s2 { fill: var(--serie-2); } .g-ponto.s3 { fill: var(--serie-3); }
+.g-alvo { fill: transparent; cursor: crosshair; }
+.g-cursor line { stroke: var(--suave); stroke-width: 1; }
+.g-legenda { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: .82rem; color: var(--texto); margin-bottom: 4px; }
+.g-legenda span { display: inline-flex; align-items: center; gap: 6px; }
+.g-chave { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+.g-chave.s1 { background: var(--serie-1); } .g-chave.s2 { background: var(--serie-2); } .g-chave.s3 { background: var(--serie-3); }
+.g-dica { position: absolute; top: 4px; background: var(--painel); color: var(--texto); border: 1px solid var(--borda); border-radius: 6px; padding: 6px 8px; font-size: .8rem; pointer-events: none; box-shadow: 0 2px 8px var(--sombra); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.g-dica .g-chave { width: 10px; }
 :focus-visible { outline: 2px solid var(--destaque); outline-offset: 1px; }
 
 /* Janela sobreposta (confirmações, prévia da proposta, JSON) */
@@ -197,7 +230,9 @@ button.mini { padding: 2px 8px; border: 1px solid var(--borda); background: var(
   body { background: #fff; color: #1d2330; }
   .proposta { color-scheme: light; --texto: #1d2330; --suave: #5b6475; --borda: #d9dde4; --cabecalho: #eef1f5; --linha-destaque: #f2f6fc;
     --alerta: #8a5a00; --alerta-fundo: #fff4d6; --erro: #b3261e; --contorno-tag: rgba(20,30,50,.10);
-    --t-informado: #e3ecfa; --t-calculado: #e2f3e8; --t-estimado: #fff1d6; --t-pendente: #fbe3e1; --t-na: #eceef2; color: var(--texto); }
+    --t-informado: #e3ecfa; --t-calculado: #e2f3e8; --t-estimado: #fff1d6; --t-pendente: #fbe3e1; --t-na: #eceef2;
+    --serie-1: #2a78d6; --serie-2: #eb6834; --serie-3: #1baf7a; --painel: #fff; --fundo: #fff; --linha-destaque: #f2f6fc; color: var(--texto); }
+  .proposta .grafico { page-break-inside: avoid; }
   .app, .sobreposicao, .aviso-toast { display: none !important; }
   .proposta { display: block; }
   .proposta h1 { font-size: 1.5rem; }

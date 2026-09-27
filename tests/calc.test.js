@@ -7,152 +7,132 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.01, (msg || '') + ` es
 
 function base() {
   const s = Calc.estadoPadrao();
-  Object.assign(s.plano, { lead: 'Teste', credito: 100000, prazo: 100, taxaAdm: 20, frTipo: 'pct', frValor: 2, mesInicial: '2026-10' });
-  s.reajuste.credito.indice = 'sem';
-  s.reajuste.parcela.indice = 'sem';
+  Object.assign(s.plano, { lead: 'Teste', credito: 100000, prazo: 100, mesContemplacao: 12, taxaAdm: 20, fundoReserva: 2, indice: 'pre5' });
   return s;
 }
+
+test('padrões do plano', () => {
+  const s = Calc.estadoPadrao();
+  assert.equal(s.plano.prazo, 240);
+  assert.equal(s.plano.mesContemplacao, 12);
+  assert.equal(s.plano.seguroPct, 0.038);
+  assert.equal(s.plano.indice, 'incc');
+  assert.equal(s.lances.embutidoPct, 25);
+  assert.equal(s.lances.fixoPct, 50);
+});
 
 test('parcela integral segue a fórmula informada', () => {
   const s = base();
-  near(Calc.parcelaFormula(s, 0), 1220);
-  const r = Calc.simular(s);
-  near(r.resumo.parcelaIntegral.v, 1220);
-  near(r.resumo.parcelaInicial.v, 1220);
-  near(r.resumo.totalPago.v, 122000, 'total no prazo');
+  near(Calc.parcelaDataBase(s, 0), 1220);
+  const n = Calc.nucleo(s, 'sorteio');
+  near(n.linhas[0].total, 1220);
 });
 
-test('parcela com redutor de 50% reduz apenas o fundo comum', () => {
+test('reajuste anual incide a partir do mês 13 sobre crédito e parcela', () => {
+  const n = Calc.nucleo(base(), 'sorteio');
+  near(n.linhas[11].total, 1220);
+  near(n.linhas[12].total, 1281);
+  near(n.linhas[24].credAtual, 110250);
+});
+
+test('índice estimado sem taxa não é calculado após o mês 12', () => {
+  const s = base();
+  s.plano.indice = 'ipca';
+  const n = Calc.nucleo(s, 'sorteio');
+  near(n.linhas[11].total, 1220);
+  assert.equal(n.linhas[12].total, null);
+  assert.ok(Calc.validar(s).some((v) => v.campo === 'plano.indiceTaxa' && v.nivel === 'erro'));
+  s.plano.indiceTaxa = 4;
+  near(Calc.nucleo(s, 'sorteio').linhas[12].total, 1220 * 1.04);
+});
+
+test('redutor vale até a contemplação e a diferença é diluída depois', () => {
   const s = base();
   s.parcela.modalidade = 'r50';
-  near(Calc.parcelaFormula(s, 50), 500 + 200 + 20);
+  const n = Calc.nucleo(s, 'sorteio');
+  near(n.linhas[0].total, 720);
+  near(n.linhas[11].total, 720);
+  const fcBase = n.linhas.reduce((a, l) => a + l.fundoComum / l.f, 0);
+  near(fcBase, 100000, 'fundo comum integralizado');
 });
 
-test('redutor sem regra de recomposição deixa meses posteriores pendentes', () => {
+test('adesão diluída e seguro prestamista somados à parcela', () => {
   const s = base();
-  Object.assign(s.parcela, { modalidade: 'r50', redIni: 1, redFim: 12 });
-  const r = Calc.simular(s);
-  near(r.cronograma.linhas[11].parcela, 720);
-  assert.equal(r.cronograma.linhas[12].parcela, null);
-  assert.equal(r.resumo.totalPago.v, null);
-  assert.ok(r.resumo.totalPago.pend.some((p) => /recomposto/.test(p)));
+  Object.assign(s.plano, { adesaoAtiva: true, adesaoPct: 1, adesaoMeses: 5, seguroAtivo: true });
+  const n = Calc.nucleo(s, 'sorteio');
+  near(n.linhas[0].total, 1220 + 200 + 38);
+  near(n.linhas[5].total, 1220 + 38);
 });
 
-test('recomposição por diluição integraliza 100% do fundo comum', () => {
-  const s = base();
-  Object.assign(s.parcela, { modalidade: 'r50', redIni: 1, redFim: 12, recomposicao: 'diluir' });
-  const cr = Calc.cronograma(s, null);
-  const fc = cr.linhas.reduce((a, l) => a + l.fundoComum, 0);
-  near(fc, 100000, 'fundo comum total');
-});
-
-test('reajuste pré-fixado 5% ao ano recalcula parcela a partir do mês 13', () => {
-  const s = base();
-  s.reajuste.credito.indice = 'pre5';
-  s.reajuste.parcela.indice = 'pre5';
-  const cr = Calc.cronograma(s, null);
-  near(cr.linhas[11].parcela, 1220);
-  near(cr.linhas[12].parcela, 1281);
-  near(cr.linhas[24].credAtual, 110250);
-});
-
-test('índice IPCA sem taxa projetada não é calculado', () => {
-  const s = base();
-  s.reajuste.parcela.indice = 'ipca';
-  const cr = Calc.cronograma(s, null);
-  near(cr.linhas[11].parcela, 1220);
-  assert.equal(cr.linhas[12].parcela, null);
-  assert.ok(Calc.validar(s).some((v) => /sem premissa de projeção/.test(v.msg)));
-});
-
-function comLance() {
-  const s = base();
-  Object.assign(s.recursos, {
-    fgtsDisponivel: 8000, fgtsPermitido: true, fgtsUsar: 5000, fgtsEmLivre: true,
-    embutidoTipo: 'pct', embutidoValor: 20, embutidoEmLivre: true, embutidoLimitePct: 25,
-    baseCalculo: 'contratado', embutidoTratamento: 'descontar'
-  });
-  Object.assign(s.contemplacao.livre, { tipo: 'pct', valor: 30, mes: 12, premissa: 'Hipótese do consultor' });
-  Object.assign(s.contemplacao.sorteio, { mes: 24, premissa: 'Hipótese do consultor' });
-  Object.assign(s.venda, { ativa: true, base: 'pct_liquido', pct: 25, comissaoPct: 10, custosFixos: 0 });
+function comLances(s) {
+  Object.assign(s.lances, { embutidoAtivo: true, fixoAtivo: true, fixoUsarEmbutido: true });
   return s;
 }
 
-test('cenário de lance separa recursos próprios, FGTS e embutido sem dupla contagem', () => {
-  const r = Calc.simular(comLance());
-  const L = r.cenarioB.linhas;
-  near(L.lance.v, 30000);
-  near(L.embutido.v, 20000);
-  near(L.fgts.v, 5000);
-  near(L.proprios.v, 5000);
-  near(L.credLiquido.v, 80000);
-  near(L.totalParcelas.v, 14640);
-  near(L.totalAportado.v, 14640 + 5000 + 5000, 'embutido não entra no aporte');
-  near(L.vendaBruta.v, 20000);
-  near(L.vendaLiquida.v, 18000);
-  near(L.resultado.v, 18000 - 14640 - 5000 - 5000);
+test('lance fixo com embutido: composição, venda e resultado', () => {
+  const n = Calc.nucleo(comLances(base()), 'fixo');
+  near(n.lance.total, 50000);
+  near(n.embutido, 25000);
+  near(n.proprios, 25000);
+  near(n.credLiquido, 75000);
+  near(n.totalParcelas, 14640);
+  near(n.totalAportado, 39640, 'embutido não entra no aporte');
+  near(n.venda, 15000);
+  near(n.resultado, 15000 - 39640);
 });
 
-test('FGTS pode ser apenas informativo no resultado', () => {
-  const s = comLance();
-  s.resultado.fgtsTratamento = 'informativo';
-  near(Calc.simular(s).cenarioB.linhas.resultado.v, 18000 - 14640 - 5000);
+test('sorteio: venda de 20% sobre o crédito', () => {
+  const n = Calc.nucleo(base(), 'sorteio');
+  near(n.venda, 20000);
+  near(n.resultado, 20000 - 14640);
 });
 
-test('FGTS não confirmado não é usado', () => {
-  const s = comLance();
-  s.recursos.fgtsPermitido = false;
-  const L = Calc.simular(s).cenarioB.linhas;
-  assert.equal(L.fgts.v, 0);
-  near(L.proprios.v, 10000);
+test('abatimento por parcela reduz proporcionalmente as parcelas restantes', () => {
+  const n = Calc.nucleo(comLances(base()), 'fixo');
+  const k = 1 - 50000 / (88 * 1220);
+  near(n.linhas[12].total, 1281 * k);
+  assert.equal(n.prazoRestante, 88);
 });
 
-test('embutido sem regra impede crédito líquido', () => {
-  const s = comLance();
-  s.recursos.embutidoTratamento = 'definir';
-  const L = Calc.simular(s).cenarioB.linhas;
-  assert.equal(L.credLiquido.v, null);
-  assert.ok(L.credLiquido.pend.includes(Calc.MSG.embutidoSemRegra));
+test('abatimento por prazo quita parcelas a partir do fim', () => {
+  const s = comLances(base());
+  s.plano.abatimento = 'prazo';
+  const n = Calc.nucleo(s, 'fixo');
+  assert.equal(n.prazoRestante, 48);
+  near(n.linhas[12].total, 1281);
+  assert.equal(n.linhas[99].encerrado, true);
 });
 
-test('sorteio não desconta embutido', () => {
-  const L = Calc.simular(comLance()).cenarioA.linhas;
-  assert.equal(L.embutido.v, 0);
-  near(L.credLiquido.v, 100000);
-  near(L.totalParcelas.v, 24 * 1220);
+test('usar embutido sem lance embutido ativo não desconta embutido', () => {
+  const s = comLances(base());
+  s.lances.embutidoAtivo = false;
+  const n = Calc.nucleo(s, 'fixo');
+  near(n.embutido, 0);
+  near(n.proprios, 50000);
 });
 
-test('embutido acima do limite gera erro', () => {
-  const s = comLance();
-  s.recursos.embutidoLimitePct = 10;
-  assert.ok(Calc.simular(s).validacoes.some((v) => v.nivel === 'erro' && /superior ao limite/.test(v.msg)));
-});
-
-test('soma manual de recursos diferente do total gera erro', () => {
-  const s = comLance();
-  s.recursos.recursosAuto = false;
-  s.recursos.recursosProprios = 1000;
-  assert.ok(Calc.simular(s).validacoes.some((v) => /diferente do total ofertado/.test(v.msg)));
-});
-
-test('base de lance a definir deixa percentual pendente', () => {
-  const s = comLance();
-  s.recursos.baseCalculo = 'definir';
-  const L = Calc.simular(s).cenarioB.linhas;
-  assert.equal(L.lance.v, null);
-  assert.equal(L.resultado.v, null);
-});
-
-test('mês de contemplação ausente não é calculado', () => {
+test('embutido maior que o lance é limitado ao lance', () => {
   const s = base();
-  const r = Calc.simular(s);
-  assert.equal(r.cenarioA.ok, false);
-  assert.match(r.cenarioA.motivo, /Não calculado/);
+  Object.assign(s.lances, { embutidoAtivo: true, livreAtivo: true, livrePct: 10, livreUsarEmbutido: true });
+  const n = Calc.nucleo(s, 'livre');
+  near(n.embutido, 10000);
+  near(n.proprios, 0);
+  assert.ok(Calc.simular(s).validacoes.some((v) => /limitado/.test(v.msg)));
+});
+
+test('projeções só são calculadas quando selecionadas', () => {
+  const s = comLances(base());
+  assert.deepEqual(Object.keys(Calc.simular(s).projecoes), []);
+  s.projecoes = { parcelas: true, credito: true, rentabilidade: true };
+  const p = Calc.simular(s).projecoes;
+  assert.equal(p.parcelas.length, 2);
+  assert.equal(p.credito.length, 9);
+  near(p.rentabilidade[0].pontos[11].y, 20000 - 14640);
 });
 
 test('validações de campos obrigatórios', () => {
   const v = Calc.validar(Calc.estadoPadrao());
-  for (const c of ['plano.lead', 'plano.credito', 'plano.prazo', 'plano.taxaAdm', 'plano.frValor']) {
+  for (const c of ['plano.lead', 'plano.credito', 'plano.taxaAdm', 'plano.fundoReserva']) {
     assert.ok(v.some((x) => x.campo === c && x.nivel === 'erro'), c);
   }
 });
