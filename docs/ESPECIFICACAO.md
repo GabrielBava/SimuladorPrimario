@@ -178,6 +178,7 @@ Notação: C = crédito contratado; N = prazo; mC = mês da contemplação; r = 
 | Crédito atualizado | C × F(m) |
 | Fundo comum (parcela integral) | (100% ÷ N) × C × F |
 | Fundo comum até a contemplação | (100% ÷ N) × C × F × (1 − r) |
+| Parcela com redutor — **HS** | [(100% ÷ N) + (TA% ÷ N) + (FR% ÷ N)] × C × F × (1 − r): o redutor (ex.: meia parcela, 50%) vale para a parcela inteira; as demais administradoras aplicam o redutor só no fundo comum. A diferença é recomposta depois da contemplação nos três componentes |
 | Fundo comum após a contemplação | C × F × [1/N + r × mC ÷ (N × (N − mC))] |
 | Taxa de administração do mês | (TA% ÷ N) × C × F |
 | Fundo de reserva do mês | (FR% ÷ N) × C × F |

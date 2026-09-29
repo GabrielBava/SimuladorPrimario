@@ -98,7 +98,8 @@
         <label class="f" data-show="parcela.modalidade=outro"><span>% de redução</span>
           <input type="number" id="f-redutorOutro" data-k="parcela.redutorOutro" min="0" max="99" step="any"></label>
       </div>
-      <small class="nota" data-show="parcela.modalidade!=integral">Vale até a contemplação; a diferença é diluída depois.</small>
+      <small class="nota" data-show="parcela.modalidade!=integral&plano.administradora!=HS">Redutor só no fundo comum. Vale até a contemplação; a diferença é diluída depois.</small>
+      <small class="nota" data-show="parcela.modalidade!=integral&plano.administradora=HS">HS: redutor sobre a parcela inteira (fundo comum + taxa adm. + fundo de reserva). Vale até a contemplação; a diferença é diluída depois.</small>
     </details>
 
     <!-- 3. Estratégias de Contemplação -->

@@ -120,6 +120,7 @@
   }
 
   function avaliarCondicao(expr) {
+    if (expr.includes('&')) return expr.split('&').every(avaliarCondicao);
     if (expr.startsWith('!')) return !obter(expr.slice(1));
     const m = expr.match(/^([\w.]+)(!=|=)(.+)$/);
     if (!m) return !!obter(expr);

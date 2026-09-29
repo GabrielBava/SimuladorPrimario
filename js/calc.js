@@ -179,6 +179,11 @@
   // Dados básicos
   // ---------------------------------------------------------------------------
 
+  /** HS aplica o redutor sobre a parcela inteira (FC + taxa adm. + fundo de reserva); as demais, só no fundo comum. */
+  function redutorNaParcelaToda(p) {
+    return String(p.administradora || '').trim().toUpperCase() === 'HS';
+  }
+
   function basicos(s) {
     const p = s.plano;
     const C = num(p.credito), N = num(p.prazo), ta = num(p.taxaAdm), fr = num(p.fundoReserva);
@@ -256,6 +261,7 @@
     // Recomposição do redutor: o percentual não pago até a contemplação é diluído nas parcelas restantes
     const nRest = N - mesC;
     const extraFC = r > 0 && nRest > 0 ? (r / 100) * mesC / (N * nRest) : 0;
+    const redutorTodo = redutorNaParcelaToda(p);
 
     const linhas = [];
     for (let m = 1; m <= N; m++) {
@@ -266,11 +272,13 @@
       } else {
         const cref = C * f;
         // Fundo comum = (100% ÷ prazo) × crédito; Taxa adm. = (TA% ÷ prazo) × crédito; Fundo de reserva = (FR% ÷ prazo) × crédito
-        const fc = m <= mesC ? (1 / N) * cref * (1 - r / 100) : cref * (1 / N + extraFC);
+        // Com redutor: até a contemplação multiplica por (1 − r); depois recompõe a diferença (extraFC). Na HS vale para os três componentes.
+        const fator1 = m <= mesC ? 1 - r / 100 : 1 + extraFC * N;
+        const fatorTaxas = redutorTodo ? fator1 : 1;
         l.credAtual = cref;
-        l.fundoComum = fc;
-        l.taxa = ((ta / 100) / N) * cref;
-        l.fundo = ((fr / 100) / N) * cref;
+        l.fundoComum = (1 / N) * cref * fator1;
+        l.taxa = ((ta / 100) / N) * cref * fatorTaxas;
+        l.fundo = ((fr / 100) / N) * cref * fatorTaxas;
         l.plano = l.fundoComum + l.taxa + l.fundo;
         l.adesao = m <= adesaoMeses ? adesaoMes : 0;
         l.seguro = isNum(seguroPct) ? (seguroPct / 100) * cref : null;
@@ -531,7 +539,9 @@
   function parcelaDataBase(s, redutor) {
     const b = basicos(s);
     if (!isNum(b.C) || !isNum(b.N) || !isNum(b.ta) || !isNum(b.fr) || b.N < 1) return null;
-    return (b.C / b.N) * (1 - redutor / 100) + (b.ta / 100) * b.C / b.N + (b.fr / 100) * b.C / b.N;
+    const k = 1 - redutor / 100;
+    const kTaxas = redutorNaParcelaToda(s.plano) ? k : 1;
+    return (1 / b.N) * b.C * k + ((b.ta / 100) / b.N) * b.C * kTaxas + ((b.fr / 100) / b.N) * b.C * kTaxas;
   }
 
   function resumo(s, nSorteio) {
@@ -557,7 +567,9 @@
     if (s.parcela.modalidade !== 'integral') {
       const pr = isNum(r) ? parcelaDataBase(s, r) : null;
       R.parcelaRedutor = isNum(pr)
-        ? V(pr, 'calculado', 'Parcela com redutor = (' + fmtBRL(C) + ' ÷ ' + N + ') × (1 − ' + fmtPct(r, 0) + ') + (' + fmtBRL(R.taxaAdm.v) + ' ÷ ' + N + ') + (' + fmtBRL(R.fundoReserva.v) + ' ÷ ' + N + ')', 'Fórmula da parcela; sem adesão, seguro e reajuste')
+        ? V(pr, 'calculado', redutorNaParcelaToda(p)
+          ? 'Parcela com redutor (HS) = [(' + fmtBRL(C) + ' ÷ ' + N + ') + (' + fmtBRL(R.taxaAdm.v) + ' ÷ ' + N + ') + (' + fmtBRL(R.fundoReserva.v) + ' ÷ ' + N + ')] × (1 − ' + fmtPct(r, 0) + ')'
+          : 'Parcela com redutor = (' + fmtBRL(C) + ' ÷ ' + N + ') × (1 − ' + fmtPct(r, 0) + ') + (' + fmtBRL(R.taxaAdm.v) + ' ÷ ' + N + ') + (' + fmtBRL(R.fundoReserva.v) + ' ÷ ' + N + ')', 'Fórmula da parcela; sem adesão, seguro e reajuste')
         : P(b.pend, 'Parcela com redutor');
     }
     const l1 = nSorteio.ok ? nSorteio.linhas[0] : null;
@@ -745,7 +757,7 @@
   }
 
   return {
-    INDICES, CATEGORIAS, ADMINISTRADORAS, MODALIDADES_PARCELA, REGRAS, MSG, NOMES_MOD,
+    redutorNaParcelaToda, INDICES, CATEGORIAS, ADMINISTRADORAS, MODALIDADES_PARCELA, REGRAS, MSG, NOMES_MOD,
     estadoPadrao, aplicarCategoria, simular, nucleo, aquisicao, tirMensal, vpl, cenario, validar, fator, qtdReajustes, parcelaDataBase, redutorPct,
     nomeIndice, taxaIndice, indiceEstimado, lanceSobre,
     fmtBRL, fmtPct, fmtNum, num, isNum

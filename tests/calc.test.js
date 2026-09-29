@@ -258,3 +258,20 @@ test('parcela: fundo comum, taxa adm. e fundo de reserva = (percentual ÷ prazo)
   near(l.total, 1016.67 - 0.0033);
   near(Calc.simular(s).resumo.parcelaInicial.v, l.total);
 });
+
+test('HS: meia parcela divide fundo comum + taxa adm. + fundo de reserva; demais administradoras só o fundo comum', () => {
+  const s = base(); // 100.000 / 100 meses / 20% / 2% → integral 1.220
+  s.parcela.modalidade = 'r50';
+  s.plano.administradora = 'Embracon';
+  near(Calc.nucleo(s, 'sorteio').linhas[0].total, 500 + 200 + 20, 'redutor só no fundo comum');
+  s.plano.administradora = 'HS';
+  const n = Calc.nucleo(s, 'sorteio');
+  near(n.linhas[0].total, 1220 / 2, 'HS: (FC + TA + FR) ÷ 2');
+  near(n.linhas[11].total, 610);
+  near(Calc.parcelaDataBase(s, 50), 610);
+  // a diferença (inclusive de taxa e fundo) é recomposta depois da contemplação
+  const somaBase = (c) => n.linhas.reduce((a, l) => a + l[c] / l.f, 0);
+  near(somaBase('fundoComum'), 100000);
+  near(somaBase('taxa'), 20000);
+  near(somaBase('fundo'), 2000);
+});
