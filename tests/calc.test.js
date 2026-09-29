@@ -230,3 +230,20 @@ test('FGTS entra nos recursos próprios e o lance total recalcula as parcelas', 
   s.lances.fgtsValor = 90000;
   near(Calc.nucleo(s, 'fixo').fgts, 25000, 'FGTS limitado aos recursos próprios');
 });
+
+test('Lance Fidelidade: desabilitado por padrão e 100% embutido a partir da parcela da opção', () => {
+  assert.equal(Calc.estadoPadrao().fidelidade.ativo, false);
+  const s = base();
+  assert.deepEqual(Calc.simular(s).fidelidade, []);
+  s.fidelidade.ativo = true;
+  const f = Calc.simular(s).fidelidade;
+  assert.deepEqual(f.map((x) => [x.parcela, x.pct]), [[6, 30], [12, 27], [18, 18]]);
+  const n1 = f[0].nucleo;
+  assert.equal(n1.mesC, 6);
+  near(n1.embutido, 30000);
+  near(n1.proprios, 0);
+  near(n1.credLiquido, 70000);
+  near(n1.saldoDevedor, 94 * 1220 - 30000);
+  const n3 = f[2].nucleo;
+  near(n3.embutido, 0.18 * 100000 * 1.05, 'percentual sobre o crédito reajustado no mês 18');
+});

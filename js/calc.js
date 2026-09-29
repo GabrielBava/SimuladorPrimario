@@ -109,6 +109,8 @@
         livreUsarFgts: false
       },
       projecoes: { parcelas: false, credito: false, rentabilidade: false },
+      // Lance Fidelidade: desabilitado ao iniciar; cada opção tem parcela inicial e % de embutido
+      fidelidade: { ativo: false, p1Parcela: 6, p1Pct: 30, p2Parcela: 12, p2Pct: 27, p3Parcela: 18, p3Pct: 18 },
       contato: { cliente: '' } // WhatsApp do cliente que recebe a proposta
     };
   }
@@ -195,12 +197,14 @@
    * 'embutido': o lance é composto só pelo lance embutido (sem recursos próprios).
    * 'fixo' | 'livre': percentual da modalidade; com "Usar embutido", o embutido é descontado do total.
    */
-  function lanceSobre(s, mod, base) {
+  function lanceSobre(s, mod, base, pctFidelidade) {
     const l = s.lances;
-    const pctE = num(l.embutidoPct);
-    const pct = mod === 'embutido' ? pctE : num(mod === 'fixo' ? l.fixoPct : l.livrePct);
-    const usar = mod === 'embutido' || ((mod === 'fixo' ? l.fixoUsarEmbutido : l.livreUsarEmbutido) && l.embutidoAtivo);
-    const usaFgts = mod !== 'embutido' && l.fgtsAtivo && (mod === 'fixo' ? l.fixoUsarFgts : l.livreUsarFgts);
+    const soEmbutido = mod === 'embutido' || mod === 'fidelidade';
+    // Lance Fidelidade: todo o lance é embutido, com o percentual da opção escolhida
+    const pctE = mod === 'fidelidade' ? num(pctFidelidade) : num(l.embutidoPct);
+    const pct = soEmbutido ? pctE : num(mod === 'fixo' ? l.fixoPct : l.livrePct);
+    const usar = soEmbutido || ((mod === 'fixo' ? l.fixoUsarEmbutido : l.livreUsarEmbutido) && l.embutidoAtivo);
+    const usaFgts = !soEmbutido && l.fgtsAtivo && (mod === 'fixo' ? l.fixoUsarFgts : l.livreUsarFgts);
     const out = { pct, pctEmbutido: usar ? pctE : 0, usaEmbutido: usar, usaFgts, total: null, embutido: null, fgts: null, proprios: null, limitado: false };
     if (!isNum(pct) || !isNum(base)) return out;
     out.total = (pct / 100) * base;
@@ -226,7 +230,7 @@
    * @param {'sorteio'|'fixo'|'livre'} mod modalidade de contemplação
    * @param {number} [mesCOverride] mês de contemplação (padrão: projeção do plano)
    */
-  function nucleo(s, mod, mesCOverride) {
+  function nucleo(s, mod, mesCOverride, pctFidelidade) {
     const b = basicos(s);
     const p = s.plano;
     const mesC = num(mesCOverride != null ? mesCOverride : p.mesContemplacao);
@@ -283,7 +287,7 @@
     // Lance e abatimento
     let lance = null;
     if (mod !== 'sorteio') {
-      lance = lanceSobre(s, mod, credBruto);
+      lance = lanceSobre(s, mod, credBruto, pctFidelidade);
       if (!isNum(lance.pct)) res.pend.push('Percentual do ' + NOMES_MOD[mod].toLowerCase() + ' não informado');
       if (lance.usaEmbutido && !isNum(lance.pctEmbutido)) res.pend.push('Percentual do lance embutido não informado');
       const pos = linhas.slice(mesC);
@@ -354,7 +358,7 @@
   // Cenário com memória de cálculo (tabelas de cenários)
   // ---------------------------------------------------------------------------
 
-  const NOMES_MOD = { sorteio: 'Sorteio', embutido: 'Lance Embutido', fixo: 'Lance Fixo', livre: 'Lance Livre' };
+  const NOMES_MOD = { sorteio: 'Sorteio', embutido: 'Lance Embutido', fixo: 'Lance Fixo', livre: 'Lance Livre', fidelidade: 'Lance Fidelidade' };
   const TITULOS = {
     sorteio: 'Contemplação por sorteio',
     embutido: 'Contemplação por lance embutido',
@@ -470,6 +474,14 @@
       if (!isNum(v)) add('erro', 'lances.' + campo, rot + ': informe o percentual.');
       else if (v < 0 || v > 100) add('erro', 'lances.' + campo, rot + ': percentual inválido (0 a 100%).');
     };
+    const fid = s.fidelidade;
+    if (fid && fid.ativo) {
+      [1, 2, 3].forEach((i) => {
+        const pa = num(fid['p' + i + 'Parcela']), pc = num(fid['p' + i + 'Pct']);
+        if (!isNum(pa) || pa < 1 || !Number.isInteger(pa) || (isNum(N) && pa > N)) add('erro', 'fidelidade.p' + i + 'Parcela', 'Lance Fidelidade ' + i + ': parcela inicial deve estar entre 1 e o prazo.');
+        if (!isNum(pc) || pc < 0 || pc > 100) add('erro', 'fidelidade.p' + i + 'Pct', 'Lance Fidelidade ' + i + ': percentual inválido (0 a 100%).');
+      });
+    }
     if (l.fgtsAtivo && !isNum(num(l.fgtsValor))) add('erro', 'lances.fgtsValor', 'FGTS ativado: informe o valor disponível.');
     if (l.embutidoAtivo) pctOk('embutidoPct', 'Lance embutido');
     if (l.fixoAtivo) pctOk('fixoPct', 'Lance fixo');
@@ -660,6 +672,20 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Lance Fidelidade: contemplação a partir da parcela da opção, lance 100% embutido
+  // ---------------------------------------------------------------------------
+
+  function fidelidade(s) {
+    const f = s.fidelidade;
+    if (!f || !f.ativo) return [];
+    return [1, 2, 3].map((i) => {
+      const parcela = num(f['p' + i + 'Parcela']);
+      const pct = num(f['p' + i + 'Pct']);
+      return { i, nome: 'Fidelidade ' + i, parcela, pct, nucleo: nucleo(s, 'fidelidade', parcela, pct) };
+    });
+  }
+
+  // ---------------------------------------------------------------------------
   // Simulação de alavancagem: contemplação e venda em meses sucessivos
   // ---------------------------------------------------------------------------
 
@@ -697,15 +723,18 @@
     cenarios.forEach((c) => c.alertas.forEach((x) => validacoes.push(Object.assign({ campo: 'lances' }, x))));
     const b = basicos(s);
     const baseLance = nucleos.sorteio && nucleos.sorteio.ok ? nucleos.sorteio.credBruto : null;
+    const fid = fidelidade(s);
     const valor = (pct) => (isNum(baseLance) && isNum(num(pct)) ? (num(pct) / 100) * baseLance : null);
     return {
       validacoes,
       resumo: resumo(s, nucleos.sorteio),
       cenarios,
-      valoresLance: { embutido: valor(s.lances.embutidoPct), fixo: valor(s.lances.fixoPct), livre: valor(s.lances.livrePct) },
+      valoresLance: Object.assign({ embutido: valor(s.lances.embutidoPct), fixo: valor(s.lances.fixoPct), livre: valor(s.lances.livrePct) },
+        ...fid.map((f) => ({ ['fid' + f.i]: f.nucleo.ok ? f.nucleo.embutido : null }))),
       baseLance,
       projecoes: projecoes(s, nucleos),
       alavancagem: alavancagem(s),
+      fidelidade: fid,
       aquisicao: ['sorteio'].concat(s.lances.embutidoAtivo ? ['embutido'] : []).map((m) => aquisicao(s, m)),
       premissas: premissas(s),
       pontosConfirmar: pontosConfirmar(s),

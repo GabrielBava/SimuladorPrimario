@@ -144,6 +144,38 @@
       </div>
     </details>
 
+    <!-- 4. Lance Fidelidade (opcional) -->
+    <details class="secao" open data-secao="fidelidade">
+      <summary>Lance Fidelidade</summary>
+      <label class="chk chk-titulo linha-habilitar"><input type="checkbox" id="f-fidelidadeAtivo" data-k="fidelidade.ativo"> Habilitar Lance Fidelidade</label>
+      <div data-show="fidelidade.ativo">
+      <div class="bloco">
+        <div class="titulo-fid">Lance Fidelidade 1</div>
+        <div class="grid2">
+          <label class="f"><span>A partir da Parcela</span><input type="number" id="f-fid1Parcela" data-k="fidelidade.p1Parcela" min="1" step="1"></label>
+          <label class="f"><span>% Embutido</span><input type="number" id="f-fid1Pct" data-k="fidelidade.p1Pct" min="0" max="100" step="any"></label>
+        </div>
+        <label class="f"><span>Valor (R$)</span><output class="valor-travado" id="v-fid1" data-valor="fid1" aria-live="polite">—</output></label>
+      </div>
+      <div class="bloco">
+        <div class="titulo-fid">Lance Fidelidade 2</div>
+        <div class="grid2">
+          <label class="f"><span>A partir da Parcela</span><input type="number" id="f-fid2Parcela" data-k="fidelidade.p2Parcela" min="1" step="1"></label>
+          <label class="f"><span>% Embutido</span><input type="number" id="f-fid2Pct" data-k="fidelidade.p2Pct" min="0" max="100" step="any"></label>
+        </div>
+        <label class="f"><span>Valor (R$)</span><output class="valor-travado" id="v-fid2" data-valor="fid2" aria-live="polite">—</output></label>
+      </div>
+      <div class="bloco">
+        <div class="titulo-fid">Lance Fidelidade 3</div>
+        <div class="grid2">
+          <label class="f"><span>A partir da Parcela</span><input type="number" id="f-fid3Parcela" data-k="fidelidade.p3Parcela" min="1" step="1"></label>
+          <label class="f"><span>% Embutido</span><input type="number" id="f-fid3Pct" data-k="fidelidade.p3Pct" min="0" max="100" step="any"></label>
+        </div>
+        <label class="f"><span>Valor (R$)</span><output class="valor-travado" id="v-fid3" data-valor="fid3" aria-live="polite">—</output></label>
+      </div>
+      </div>
+    </details>
+
     <!-- 4. Projeções -->
     <details class="secao" open data-secao="projecoes">
       <summary>Projeções</summary>

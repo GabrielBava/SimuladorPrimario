@@ -55,7 +55,8 @@
     sorteio: '<rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1.3" class="ic-p"/><circle cx="15" cy="15" r="1.3" class="ic-p"/><circle cx="15" cy="9" r="1.3" class="ic-p"/><circle cx="9" cy="15" r="1.3" class="ic-p"/>',
     embutido: '<path d="M12 4 3 8.5l9 4.5 9-4.5z"/><path d="m3 12.5 9 4.5 9-4.5"/><path d="m3 16.5 9 4.5 9-4.5"/>',
     fixo: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1" class="ic-p"/>',
-    livre: '<path d="M4 18 10 12l3.5 3.5L20 8"/><path d="M15 8h5v5"/>'
+    livre: '<path d="M4 18 10 12l3.5 3.5L20 8"/><path d="M15 8h5v5"/>',
+    fidelidade: '<path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>'
   };
   const icone = (mod) => '<svg class="icone" viewBox="0 0 24 24" aria-hidden="true">' + ICONES[mod] + '</svg>';
 
@@ -477,9 +478,9 @@
 
   function cartaoForma(s, cen, pdf) {
     const n = cen.nucleo;
-    const id = 'forma-' + cen.mod;
+    const id = cen.id || 'forma-' + cen.mod;
     const oculto = cen.mod !== 'sorteio' && !revelados.has(id);
-    let h = '<article class="forma"><header class="forma-topo"><span class="forma-icone">' + icone(cen.mod) + '</span><h3>' + esc(cen.nome) + '</h3>' +
+    let h = '<article class="forma"><header class="forma-topo"><span class="forma-icone">' + icone(cen.mod) + '</span><h3>' + esc(cen.nome) + (cen.sub ? '<small class="forma-sub">' + esc(cen.sub) + '</small>' : '') + '</h3>' +
       (cen.mod !== 'sorteio' && !pdf ? botaoOlho(id, 'valores do ' + cen.nome.toLowerCase()) : '') + '</header>';
     if (!n.ok) return h + '<p class="nc forma-msg">' + esc(cen.motivo) + '</p></article>';
     const base = n.credBruto;
@@ -502,6 +503,19 @@
     return '<section class="bloco-res vitrine">' + tituloSecao('Formas de', 'Contemplação', 'Comparativo') +
       '<p class="g-sub">Comparação de Estratégias de Contemplação</p>' +
       '<div class="formas">' + cens.map((c) => cartaoForma(s, c, pdf)).join('') + '</div></section>';
+  }
+
+  /** Bônus de Fidelidade: cartões no mesmo formato do Lance Embutido. */
+  function secFidelidade(s, r) {
+    if (!r.fidelidade.length) return '';
+    const cards = r.fidelidade.map((f) => cartaoForma(s, {
+      mod: 'fidelidade', id: 'fidelidade-' + f.i, nome: f.nome,
+      sub: 'A partir da ' + (C.isNum(f.parcela) ? f.parcela + 'ª' : '—') + ' parcela · ' + (C.isNum(f.pct) ? C.fmtNum(f.pct, 2) + '%' : '—') + ' de embutido',
+      nucleo: f.nucleo, motivo: 'Não calculado: ' + f.nucleo.pend.join('; ') + '.'
+    }, false));
+    return '<section class="bloco-res vitrine">' + tituloSecao('Bônus', 'Fidelidade', 'Extra · Lance Fidelidade') +
+      '<p class="g-sub">Lance 100% embutido liberado a partir da parcela de cada opção</p>' +
+      '<div class="formas">' + cards.join('') + '</div></section>';
   }
 
   function tabelaAlavancagem(a, pdf) {
@@ -558,6 +572,7 @@
     h += secResumo(s, r);
     h += secCaracteristicas(s, r);
     h += secFormas(s, r, false);
+    h += secFidelidade(s, r);
     h += secAlavancagem(r, false);
     h += secAquisicao(r);
     const proj = secProjecoes(r, false);

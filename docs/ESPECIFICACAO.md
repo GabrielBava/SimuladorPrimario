@@ -1,6 +1,6 @@
 # Especificação funcional — Simulador de Cartas de Consórcio Primárias
 
-Versão 2.4 · Implementação de referência: `index.html`, `js/calc.js` (motor de cálculo) e `js/app.js` (interface).
+Versão 2.5 · Implementação de referência: `index.html`, `js/calc.js` (motor de cálculo) e `js/app.js` (interface).
 
 > **Observação obrigatória:** a simulação depende dos dados do grupo, do contrato, das regras da administradora e das premissas inseridas. Nenhum valor é contratual. Não há garantia de contemplação, venda, lucro, valorização ou rentabilidade.
 
@@ -152,6 +152,20 @@ Cada cartão de lance lembra onde o lance é abatido (parcela ou prazo). No sort
 - **Características do Plano:** projeção de contemplação só com o número (ex.: 12); abatimento "Parcela" ou "Prazo".
 - **Alavancagem:** meses 1 a 12 e depois 18, 24, 30, 36, 42 e 48. Rentabilidade ao mês = (Vl. venda ÷ Aporte)^(1/mês) − 1.
 - **Aquisição:** cenários de Sorteio e Lance Embutido.
+
+### 2.9 Lance Fidelidade (v2.5)
+
+- **Menu:** bloco "Lance Fidelidade", abaixo de Estratégia de Lance, com "Habilitar Lance Fidelidade", **desmarcado ao iniciar**.
+- **Opções:** ao habilitar, abre três opções com "A partir da Parcela" (esquerda), "% Embutido" (direita) e o valor em R$, travado:
+
+  | Opção | A partir da parcela | % Embutido |
+  |---|---|---|
+  | Lance Fidelidade 1 | 6 | 30% |
+  | Lance Fidelidade 2 | 12 | 27% |
+  | Lance Fidelidade 3 | 18 | 18% |
+
+- **Regra:** lance 100% embutido, sem recursos próprios. A contemplação ocorre na parcela da opção, e o percentual incide sobre o crédito atualizado nesse mês. O lance abate o saldo conforme o "Abatimento do lance".
+- **Proposta:** seção **Bônus Fidelidade** ("Extra · Lance Fidelidade"), logo abaixo de Formas de Contemplação, com um cartão por opção no mesmo formato do Lance Embutido e o olho de exibição.
 
 ## 3. Fórmulas
 
