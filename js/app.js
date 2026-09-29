@@ -643,7 +643,7 @@
     const R = r.resumo;
     const t = C.taxaIndice(p);
     const fid = r.fidelidade || [];
-    const total = fid.length ? 4 : 3;
+    const total = 3;
     const nucleo = (mod) => { const c = r.cenarios.find((x) => x.mod === mod); return c ? c.nucleo : null; };
 
     // Página 1: dados da proposta, características e formas de contemplação
@@ -698,22 +698,20 @@
         ['Prazo total', a.prazoEfetivo + ' meses']
       ]) + '</article>';
     }).join('') + '</div>';
+    // Bônus Fidelidade (quando habilitado): abaixo da aquisição e antes do contato com o especialista
+    if (fid.length) {
+      p3 += '<div class="pdf-bloco pdf-fid">' + pdfTitulo('Bônus', 'Fidelidade') +
+        '<p class="pdf-ident">Extra · Lance 100% embutido liberado a partir da parcela de cada opção, sem recursos próprios; percentual sobre o crédito atualizado no mês da contemplação.</p>' +
+        '<div class="pdf-grade c' + fid.length + '">' + fid.map((x) => pdfCartaoForma(x.nucleo, 'fidelidade', x.nome,
+        'A partir da ' + (C.isNum(x.parcela) ? x.parcela + 'ª' : '—') + ' parcela · ' + (C.isNum(x.pct) ? C.fmtNum(x.pct, Number.isInteger(x.pct) ? 0 : 2) + '%' : '—') + ' de embutido')).join('') + '</div></div>';
+    }
     const wa = numeroWhatsapp((window.CONFIG_SIMULADOR || {}).whatsappEspecialista);
     const msg = encodeURIComponent('Olá! Recebi a proposta de consórcio' + (p.lead ? ' de ' + p.lead : '') + ' e gostaria de conversar.');
     p3 += '<div class="pdf-cta"><div><h3>Vamos dar o próximo passo?</h3><p>Fale com o especialista para tirar dúvidas e seguir com a proposta.</p></div>' +
       (wa ? '<a class="pdf-botao" href="https://wa.me/' + wa + '?text=' + msg + '">Falar no WhatsApp</a>' : '<span class="pdf-botao inativo">Falar no WhatsApp</span>') + '</div>';
     p3 += '<div class="pdf-disclaimer"><b>Importante</b><p>' + esc(AVISO) + ' Mês de contemplação projetado, sem garantia de ocorrência. Valores de venda e CET são estimativas baseadas nas premissas informadas e no índice de reajuste estimado.</p></div>';
 
-    // Página extra (quando habilitado): Bônus Fidelidade, logo após as formas de contemplação
-    let pf = '';
-    if (fid.length) {
-      pf = '<header class="pdf-topo menor"><p class="eyebrow">Extra · Lance Fidelidade</p><h1>Bônus <span class="acento">Fidelidade</span></h1>' +
-        '<p class="pdf-ident">Lance 100% embutido liberado a partir da parcela de cada opção, sem uso de recursos próprios. O percentual incide sobre o crédito atualizado no mês da contemplação.</p></header>';
-      pf += '<div class="pdf-bloco">' + pdfTitulo('Opções de', 'Lance Fidelidade') + '<div class="pdf-grade c' + fid.length + '">' + fid.map((x) => pdfCartaoForma(x.nucleo, 'fidelidade', x.nome,
-        'A partir da ' + (C.isNum(x.parcela) ? x.parcela + 'ª' : '—') + ' parcela · ' + (C.isNum(x.pct) ? C.fmtNum(x.pct, Number.isInteger(x.pct) ? 0 : 2) + '%' : '—') + ' de embutido')).join('') + '</div></div>';
-    }
-    const paginas = [p1].concat(pf ? [pf] : [], [p2, p3]);
-    const html = paginas.map((c, i) => pdfPagina(i + 1, total, s, c)).join('');
+    const html = [p1, p2, p3].map((c, i) => pdfPagina(i + 1, total, s, c)).join('');
     return { html, data, semWhatsapp: !wa };
   }
 
