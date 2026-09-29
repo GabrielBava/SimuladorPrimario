@@ -767,9 +767,23 @@
   }
 
   estado = salvo ? mesclar(C.estadoPadrao(), salvo) : exemplo();
+  // Dados enviados pelo CRM no botão "Gerar proposta" (?nome=...&contato=..., também aceitos depois do #).
+  // Preenche apenas o nome completo e o contato do cliente; os demais campos continuam como estavam.
+  const doCrm = (function () {
+    const ler = (txt) => { try { return new URLSearchParams(String(txt || '').replace(/^[?#]/, '')); } catch (e) { return new URLSearchParams(); } };
+    const fontes = [ler(location.search), ler(location.hash)];
+    const pegar = (k) => { for (const f of fontes) { const v = f.get(k); if (v && v.trim()) return v.trim(); } return ''; };
+    const nome = pegar('nome');
+    let fone = pegar('contato').replace(/\D/g, '');
+    if (fone.length > 11 && fone.startsWith('55')) fone = fone.slice(2);
+    if (nome) estado.plano.lead = nome.slice(0, 80);
+    if (fone) estado.contato.cliente = formatarTelefone(fone);
+    return !!(nome || fone);
+  })();
   try { if (localStorage.getItem('simconsorcio.menuOculto') === '1') document.body.classList.add('menu-oculto'); } catch (e) { /* sem armazenamento */ }
   preencherSelects();
   ligarMenu();
   escreverCampos();
   atualizar();
+  if (doCrm) avisar('Nome e contato do cliente preenchidos pelo CRM.');
 })();
