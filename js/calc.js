@@ -110,7 +110,7 @@
       },
       projecoes: { parcelas: false, credito: false, rentabilidade: false },
       // Lance Fidelidade: desabilitado ao iniciar; cada opção tem parcela inicial e % de embutido
-      fidelidade: { ativo: false, p1Parcela: 6, p1Pct: 30, p2Parcela: 12, p2Pct: 27, p3Parcela: 18, p3Pct: 18 },
+      fidelidade: { ativo: false, p1Parcela: 6, p1Pct: 30, p2Parcela: 12, p2Pct: 27, p3Parcela: 18, p3Pct: 25 },
       contato: { cliente: '' } // WhatsApp do cliente que recebe a proposta
     };
   }

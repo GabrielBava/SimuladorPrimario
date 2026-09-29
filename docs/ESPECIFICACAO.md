@@ -162,10 +162,11 @@ Cada cartão de lance lembra onde o lance é abatido (parcela ou prazo). No sort
   |---|---|---|
   | Lance Fidelidade 1 | 6 | 30% |
   | Lance Fidelidade 2 | 12 | 27% |
-  | Lance Fidelidade 3 | 18 | 18% |
+  | Lance Fidelidade 3 | 18 | 25% |
 
 - **Regra:** lance 100% embutido, sem recursos próprios. A contemplação ocorre na parcela da opção, e o percentual incide sobre o crédito atualizado nesse mês. O lance abate o saldo conforme o "Abatimento do lance".
 - **Proposta:** seção **Bônus Fidelidade** ("Extra · Lance Fidelidade"), logo abaixo de Formas de Contemplação, com um cartão por opção no mesmo formato do Lance Embutido e o olho de exibição.
+- **PDF:** quando habilitado, a proposta ganha uma página "Bônus Fidelidade" logo após a página 1 (formas de contemplação), com os três cartões; o PDF passa a ter 4 páginas.
 
 ## 3. Fórmulas
 

@@ -237,7 +237,7 @@ test('Lance Fidelidade: desabilitado por padrão e 100% embutido a partir da par
   assert.deepEqual(Calc.simular(s).fidelidade, []);
   s.fidelidade.ativo = true;
   const f = Calc.simular(s).fidelidade;
-  assert.deepEqual(f.map((x) => [x.parcela, x.pct]), [[6, 30], [12, 27], [18, 18]]);
+  assert.deepEqual(f.map((x) => [x.parcela, x.pct]), [[6, 30], [12, 27], [18, 25]]);
   const n1 = f[0].nucleo;
   assert.equal(n1.mesC, 6);
   near(n1.embutido, 30000);
@@ -245,5 +245,5 @@ test('Lance Fidelidade: desabilitado por padrão e 100% embutido a partir da par
   near(n1.credLiquido, 70000);
   near(n1.saldoDevedor, 94 * 1220 - 30000);
   const n3 = f[2].nucleo;
-  near(n3.embutido, 0.18 * 100000 * 1.05, 'percentual sobre o crédito reajustado no mês 18');
+  near(n3.embutido, 0.25 * 100000 * 1.05, 'percentual sobre o crédito reajustado no mês 18');
 });

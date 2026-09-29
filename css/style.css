@@ -576,3 +576,5 @@ button, input, select, textarea { font: inherit; letter-spacing: inherit; }
 .linha-habilitar { margin: 10px 0 4px; }
 .titulo-fid { font-weight: 600; font-size: .88rem; margin: 2px 0; }
 .forma-sub { display: block; font-family: var(--fonte); font-size: .74rem; font-weight: 500; color: var(--suave); letter-spacing: 0; margin-top: 2px; }
+
+.pdf-cartao h3 .pdf-sub { display: block; font-family: var(--fonte); font-size: 9.5px; font-weight: 500; color: var(--suave); margin-top: 2px; }

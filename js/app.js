@@ -510,7 +510,7 @@
     if (!r.fidelidade.length) return '';
     const cards = r.fidelidade.map((f) => cartaoForma(s, {
       mod: 'fidelidade', id: 'fidelidade-' + f.i, nome: f.nome,
-      sub: 'A partir da ' + (C.isNum(f.parcela) ? f.parcela + 'ª' : '—') + ' parcela · ' + (C.isNum(f.pct) ? C.fmtNum(f.pct, 2) + '%' : '—') + ' de embutido',
+      sub: 'A partir da ' + (C.isNum(f.parcela) ? f.parcela + 'ª' : '—') + ' parcela · ' + (C.isNum(f.pct) ? C.fmtNum(f.pct, Number.isInteger(f.pct) ? 0 : 2) + '%' : '—') + ' de embutido',
       nucleo: f.nucleo, motivo: 'Não calculado: ' + f.nucleo.pend.join('; ') + '.'
     }, false));
     return '<section class="bloco-res vitrine">' + tituloSecao('Bônus', 'Fidelidade', 'Extra · Lance Fidelidade') +
@@ -619,11 +619,11 @@
       '<footer class="pdf-rodape"><span>' + esc(s.plano.lead) + '</span><span>' + n + ' / ' + total + '</span></footer></section>';
   }
 
-  function pdfCartaoForma(n, mod) {
+  function pdfCartaoForma(n, mod, nome, sub) {
     const v = (x) => (C.isNum(x) ? C.fmtBRL(x) : '—');
     const base = n.credBruto;
     const pct = (x) => (C.isNum(x) && C.isNum(base) && base > 0 ? '(' + C.fmtNum((x / base) * 100, 0) + '%) ' : '');
-    let h = '<article class="pdf-cartao"><header><span class="forma-icone">' + icone(mod) + '</span><h3>' + esc(C.NOMES_MOD[mod]) + '</h3></header>';
+    let h = '<article class="pdf-cartao"><header><span class="forma-icone">' + icone(mod) + '</span><h3>' + esc(nome || C.NOMES_MOD[mod]) + (sub ? '<small class="pdf-sub">' + esc(sub) + '</small>' : '') + '</h3></header>';
     if (!n.ok) return h + '<p class="nc">Não calculado</p></article>';
     return h + pdfLinhas([
       ['Crédito contratado', v(base), 'forte'],
@@ -642,7 +642,8 @@
     const p = s.plano;
     const R = r.resumo;
     const t = C.taxaIndice(p);
-    const total = 3;
+    const fid = r.fidelidade || [];
+    const total = fid.length ? 4 : 3;
     const nucleo = (mod) => { const c = r.cenarios.find((x) => x.mod === mod); return c ? c.nucleo : null; };
 
     // Página 1: dados da proposta, características e formas de contemplação
@@ -703,7 +704,16 @@
       (wa ? '<a class="pdf-botao" href="https://wa.me/' + wa + '?text=' + msg + '">Falar no WhatsApp</a>' : '<span class="pdf-botao inativo">Falar no WhatsApp</span>') + '</div>';
     p3 += '<div class="pdf-disclaimer"><b>Importante</b><p>' + esc(AVISO) + ' Mês de contemplação projetado, sem garantia de ocorrência. Valores de venda e CET são estimativas baseadas nas premissas informadas e no índice de reajuste estimado.</p></div>';
 
-    const html = pdfPagina(1, total, s, p1) + pdfPagina(2, total, s, p2) + pdfPagina(3, total, s, p3);
+    // Página extra (quando habilitado): Bônus Fidelidade, logo após as formas de contemplação
+    let pf = '';
+    if (fid.length) {
+      pf = '<header class="pdf-topo menor"><p class="eyebrow">Extra · Lance Fidelidade</p><h1>Bônus <span class="acento">Fidelidade</span></h1>' +
+        '<p class="pdf-ident">Lance 100% embutido liberado a partir da parcela de cada opção, sem uso de recursos próprios. O percentual incide sobre o crédito atualizado no mês da contemplação.</p></header>';
+      pf += '<div class="pdf-bloco">' + pdfTitulo('Opções de', 'Lance Fidelidade') + '<div class="pdf-grade c' + fid.length + '">' + fid.map((x) => pdfCartaoForma(x.nucleo, 'fidelidade', x.nome,
+        'A partir da ' + (C.isNum(x.parcela) ? x.parcela + 'ª' : '—') + ' parcela · ' + (C.isNum(x.pct) ? C.fmtNum(x.pct, Number.isInteger(x.pct) ? 0 : 2) + '%' : '—') + ' de embutido')).join('') + '</div></div>';
+    }
+    const paginas = [p1].concat(pf ? [pf] : [], [p2, p3]);
+    const html = paginas.map((c, i) => pdfPagina(i + 1, total, s, c)).join('');
     return { html, data, semWhatsapp: !wa };
   }
 
