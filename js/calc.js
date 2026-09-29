@@ -265,11 +265,12 @@
         Object.assign(l, { credAtual: null, fundoComum: null, taxa: null, fundo: null, plano: null, adesao: null, seguro: null, total: null, pend: [pendIdx] });
       } else {
         const cref = C * f;
-        const fc = m <= mesC ? (cref / N) * (1 - r / 100) : cref * (1 / N + extraFC);
+        // Fundo comum = (100% ÷ prazo) × crédito; Taxa adm. = (TA% ÷ prazo) × crédito; Fundo de reserva = (FR% ÷ prazo) × crédito
+        const fc = m <= mesC ? (1 / N) * cref * (1 - r / 100) : cref * (1 / N + extraFC);
         l.credAtual = cref;
         l.fundoComum = fc;
-        l.taxa = (ta / 100) * cref / N;
-        l.fundo = (fr / 100) * cref / N;
+        l.taxa = ((ta / 100) / N) * cref;
+        l.fundo = ((fr / 100) / N) * cref;
         l.plano = l.fundoComum + l.taxa + l.fundo;
         l.adesao = m <= adesaoMeses ? adesaoMes : 0;
         l.seguro = isNum(seguroPct) ? (seguroPct / 100) * cref : null;

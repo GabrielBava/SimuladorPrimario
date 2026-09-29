@@ -226,8 +226,8 @@
   function exemplo() {
     // Valores fictícios, apenas para demonstrar o funcionamento.
     const s = C.estadoPadrao();
-    Object.assign(s.plano, { lead: 'Exemplo ilustrativo', mesContemplacao: 12, indiceTaxa: 5, seguroAtivo: true });
-    s.parcela.modalidade = 'r50';
+    // Parcela integral e sem seguro: a parcela inicial mostra só fundo comum + taxa adm. + fundo de reserva
+    Object.assign(s.plano, { lead: 'Exemplo ilustrativo', mesContemplacao: 12, indiceTaxa: 5 });
     Object.assign(s.lances, { embutidoAtivo: true, fixoAtivo: true, fixoUsarEmbutido: true, livreAtivo: true, livrePct: 35, livreUsarEmbutido: true });
     s.projecoes = { parcelas: true, credito: true, rentabilidade: true };
     return s;

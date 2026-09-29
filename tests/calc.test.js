@@ -247,3 +247,14 @@ test('Lance Fidelidade: desabilitado por padrão e 100% embutido a partir da par
   const n3 = f[2].nucleo;
   near(n3.embutido, 0.25 * 100000 * 1.05, 'percentual sobre o crédito reajustado no mês 18');
 });
+
+test('parcela: fundo comum, taxa adm. e fundo de reserva = (percentual ÷ prazo) × crédito contratado', () => {
+  const s = Calc.estadoPadrao();
+  s.plano.lead = 'Teste';
+  const l = Calc.nucleo(s, 'sorteio').linhas[0];
+  near(l.fundoComum, (1 / 240) * 200000); // R$ 833,33
+  near(l.taxa, (0.20 / 240) * 200000); // R$ 166,67
+  near(l.fundo, (0.02 / 240) * 200000); // R$ 16,67
+  near(l.total, 1016.67 - 0.0033);
+  near(Calc.simular(s).resumo.parcelaInicial.v, l.total);
+});

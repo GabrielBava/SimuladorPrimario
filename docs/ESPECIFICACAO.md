@@ -176,10 +176,11 @@ Notação: C = crédito contratado; N = prazo; mC = mês da contemplação; r = 
 |---|---|
 | Fator de reajuste | F(m) = (1 + taxa)^⌊(m − 1) ÷ 12⌋ |
 | Crédito atualizado | C × F(m) |
-| Fundo comum até a contemplação | (C × F ÷ N) × (1 − r) |
+| Fundo comum (parcela integral) | (100% ÷ N) × C × F |
+| Fundo comum até a contemplação | (100% ÷ N) × C × F × (1 − r) |
 | Fundo comum após a contemplação | C × F × [1/N + r × mC ÷ (N × (N − mC))] |
-| Taxa de administração do mês | TA% × C × F ÷ N |
-| Fundo de reserva do mês | FR% × C × F ÷ N |
+| Taxa de administração do mês | (TA% ÷ N) × C × F |
+| Fundo de reserva do mês | (FR% ÷ N) × C × F |
 | Adesão do mês | (Adesão% × C) ÷ meses de diluição, nos primeiros meses |
 | Seguro prestamista do mês | Seguro% × C × F |
 | **Parcela total** | Fundo comum + Taxa adm. + Fundo de reserva + Adesão + Seguro |
