@@ -1,6 +1,6 @@
 # Especificação funcional — Simulador de Cartas de Consórcio Primárias
 
-Versão 2.5 · Implementação de referência: `index.html`, `js/calc.js` (motor de cálculo) e `js/app.js` (interface).
+Versão 2.6 · Implementação de referência: `index.html`, `js/calc.js` (motor de cálculo) e `js/app.js` (interface).
 
 > **Observação obrigatória:** a simulação depende dos dados do grupo, do contrato, das regras da administradora e das premissas inseridas. Nenhum valor é contratual. Não há garantia de contemplação, venda, lucro, valorização ou rentabilidade.
 
@@ -167,6 +167,19 @@ Cada cartão de lance lembra onde o lance é abatido (parcela ou prazo). No sort
 - **Regra:** lance 100% embutido, sem recursos próprios. A contemplação ocorre na parcela da opção, e o percentual incide sobre o crédito atualizado nesse mês. O lance abate o saldo conforme o "Abatimento do lance".
 - **Proposta:** seção **Bônus Fidelidade** ("Extra · Lance Fidelidade"), logo abaixo de Formas de Contemplação, com um cartão por opção no mesmo formato do Lance Embutido e o olho de exibição.
 - **PDF:** mantém 3 páginas. Página 1: proposta, características e formas de contemplação; página 2: alavancagem via sorteio e via lance embutido; página 3: simulação de aquisição, depois o bloco **Bônus Fidelidade** (quando habilitado), a chamada para o especialista e o aviso.
+
+### 2.10 Mecanismo de Alavancagem, aquisição e envio da proposta (v2.6)
+
+- **Menu:** bloco "Mecanismo de Alavancagem", abaixo do Lance Fidelidade, **desmarcado ao iniciar**. Ao habilitar:
+  - **Reaplicar:** "Valor de venda" ou "Lucro" da carta, sempre no mês da projeção de contemplação dos dados do plano.
+  - **Carta de origem:** Sorteio ou Lance Embutido.
+  - **Capital para reaplicar:** valor travado (lucro negativo conta como zero).
+  - **Quantidade de cartas:** até 4 cenários (padrão 1 e 2); campo vazio não gera cenário.
+  - **Contemplação das novas cartas (mês):** padrão 12.
+- **Regra:** as novas cartas têm as mesmas características do plano atual e são contempladas e vendidas no mês informado. Por cenário: crédito total, parcela inicial total, aporte até o mês (parcelas pagas), valor pago com o capital (e meses cobertos), aporte adicional do cliente ou sobra do capital, venda no mês, lucro (venda − aporte) e patrimônio projetado (venda + sobra do capital).
+- **Proposta:** seção "Mecanismo de Alavancagem" logo abaixo da Simulação de Alavancagem, com olho de exibição por cenário. Não entra no PDF.
+- **Simulação de Aquisição:** "Entrada (recursos próprios)" foi trocado por **Parcela atual pós-contemplação**, e "Parcelas até o fim do plano" por **Retorno mensal de locação** = 1,6% × crédito disponível (tela e PDF).
+- **Envio da proposta:** na prévia, o botão "Gerar proposta" baixa o PDF automaticamente (gerado no navegador com html2canvas e jsPDF, em `js/vendor`) e mostra a mensagem pronta para o WhatsApp, já copiada: primeiro nome em negrito, categoria, crédito, prazo, administradora e parcela inicial em destaque, reforço do Lance Fidelidade 1, 2 e 3 (quando habilitado) e aviso de que o PDF da reunião segue abaixo.
 
 ## 3. Fórmulas
 

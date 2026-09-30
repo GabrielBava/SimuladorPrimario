@@ -56,7 +56,8 @@
     embutido: '<path d="M12 4 3 8.5l9 4.5 9-4.5z"/><path d="m3 12.5 9 4.5 9-4.5"/><path d="m3 16.5 9 4.5 9-4.5"/>',
     fixo: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1" class="ic-p"/>',
     livre: '<path d="M4 18 10 12l3.5 3.5L20 8"/><path d="M15 8h5v5"/>',
-    fidelidade: '<path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>'
+    fidelidade: '<path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>',
+    mecanismo: '<path d="M4 17h4v3H4zM10 13h4v7h-4zM16 8h4v12h-4z"/><path d="M4 11 9 6l3 3 7-6"/><path d="M15 3h4v4"/>'
   };
   const icone = (mod) => '<svg class="icone" viewBox="0 0 24 24" aria-hidden="true">' + ICONES[mod] + '</svg>';
 
@@ -537,6 +538,38 @@
       tabs.map((a) => tabelaAlavancagem(a, pdf)).join('') + '</section>';
   }
 
+  /** Mecanismo de Alavancagem: reaplicação da venda (ou do lucro) da carta em novas cartas. */
+  function secMecanismo(r) {
+    const M = r.mecanismo;
+    if (!M) return '';
+    let h = '<section class="bloco-res vitrine">' + tituloSecao('Mecanismo de', 'Alavancagem', 'Extra · Reaplicação em novas cartas');
+    if (!M.ok) return h + '<p class="nc">Não calculado: ' + esc((M.pend || []).join('; ') || 'dados incompletos') + '.</p></section>';
+    const v = (x) => (C.isNum(x) ? C.fmtBRL(x) : '—');
+    const rotBase = M.base === 'lucro' ? 'Lucro' : 'Valor de venda';
+    h += '<p class="g-sub">' + rotBase + ' da carta via ' + esc(M.nomeOrigem) + ' no mês ' + M.mesOrigem + ' reaplicado em novas cartas do mesmo plano, contempladas e vendidas no mês ' + M.mesNovas + '.</p>';
+    h += '<div class="mec-capital"><div><span>Capital para reaplicar</span><b>' + v(M.capital) + '</b><small>' + rotBase + ' · mês ' + M.mesOrigem + '</small></div>' +
+      '<div><span>Por nova carta</span><b>' + v(M.carta.credito) + '</b><small>Parcela inicial ' + v(M.carta.parcela) + ' · venda no mês ' + M.mesNovas + ' ' + v(M.carta.venda) + '</small></div></div>';
+    if (!M.cenarios.length) return h + '<p class="nc">Informe a quantidade de cartas em pelo menos um cenário.</p></section>';
+    const linha = (rot, val, cls) => '<div class="forma-linha' + (cls ? ' ' + cls : '') + '"><span>' + rot + '</span><b>' + val + '</b></div>';
+    h += '<div class="formas">' + M.cenarios.map((c) => {
+      const id = 'mecanismo-' + c.i;
+      const oculto = !revelados.has(id);
+      let k = '<article class="forma"><header class="forma-topo"><span class="forma-icone">' + icone('mecanismo') + '</span><h3>Cenário ' + c.i +
+        '<small class="forma-sub">' + c.q + (c.q === 1 ? ' nova carta' : ' novas cartas') + '</small></h3>' + botaoOlho(id, 'valores do cenário ' + c.i) + '</header>';
+      k += '<div class="forma-dados' + (oculto ? ' borrado' : '') + '"' + (oculto ? ' aria-hidden="true"' : '') + '>';
+      k += linha('Crédito total', v(c.credito), 'forte');
+      k += linha('Parcela inicial total', v(c.parcelaInicial));
+      k += linha('Aporte até o mês ' + M.mesNovas, v(c.aporte));
+      k += linha('Pago com o capital', v(c.coberto) + ' · ' + c.mesesCobertos + (c.mesesCobertos === 1 ? ' mês' : ' meses'));
+      k += c.adicional > 0.005 ? linha('Aporte adicional do cliente', v(c.adicional), 'negativo-valor') : linha('Sobra do capital', v(c.sobra));
+      k += linha('Venda no mês ' + M.mesNovas, v(c.venda), 'realce');
+      k += linha('Lucro das novas cartas', v(c.lucro), 'acento-valor');
+      k += linha('Patrimônio projetado', v(c.patrimonio), 'forte');
+      return k + '</div></article>';
+    }).join('') + '</div>';
+    return h + '<p class="nota mec-nota">Patrimônio projetado = venda das novas cartas + sobra do capital. Venda estimada em ' + C.REGRAS.vendaPct + '% do crédito disponível, sem garantia.</p></section>';
+  }
+
   function cartaoAquisicao(a) {
     let h = '<article class="forma aquisicao"><header class="forma-topo"><span class="forma-icone">' + icone(a.mod) + '</span><h3>' + esc(a.nome) + '</h3></header>';
     if (!a.ok) return h + '<p class="nc forma-msg">Não calculado: ' + esc((a.pend || []).join('; ') || 'dados incompletos') + '.</p></article>';
@@ -544,8 +577,8 @@
     const linha = (rot, val, cls) => '<div class="forma-linha' + (cls ? ' ' + cls : '') + '"><span>' + rot + '</span><b>' + val + '</b></div>';
     h += '<div class="cet"><span>CET</span><b>' + (C.isNum(a.cetAno) ? C.fmtPct(a.cetAno, 2) + ' a.a.' : '—') + '</b><small>' + (C.isNum(a.cetMes) ? C.fmtPct(a.cetMes, 3) + ' a.m.' : '') + '</small></div>';
     h += linha('Crédito para aquisição', v(a.credito), 'forte');
-    h += linha('Entrada (recursos próprios)', v(a.proprios));
-    h += linha('Parcelas até o fim do plano', v(a.totalParcelas));
+    h += linha('Parcela atual pós-contemplação', v(a.parcelaPos), 'acento-valor');
+    h += linha('Retorno mensal de locação (' + C.fmtNum(C.REGRAS.locacaoPct, 1) + '%)', v(a.locacao));
     h += linha('Total desembolsado', v(a.desembolso), 'realce');
     h += linha('Custo da aquisição', v(a.custo) + (C.isNum(a.custoPct) ? ' (' + C.fmtPct(a.custoPct, 1) + ')' : ''));
     h += linha('Prazo total', a.prazoEfetivo + ' meses');
@@ -575,6 +608,7 @@
     h += secFormas(s, r, false);
     h += secFidelidade(s, r);
     h += secAlavancagem(r, false);
+    h += secMecanismo(r);
     h += secAquisicao(r);
     const proj = secProjecoes(r, false);
     if (proj) h += '<section class="bloco-res vitrine">' + tituloSecao('Cenários', 'futuros', 'Projeções') + proj + '</section>';
@@ -692,8 +726,8 @@
       h += '<div class="pdf-cet"><span>CET</span><b>' + (C.isNum(a.cetAno) ? C.fmtPct(a.cetAno, 2) : '—') + '<small> a.a.</small></b><em>' + (C.isNum(a.cetMes) ? C.fmtPct(a.cetMes, 3) + ' a.m.' : '') + '</em></div>';
       return h + pdfLinhas([
         ['Crédito para aquisição', f(a.credito), 'forte'],
-        ['Entrada (recursos próprios)', f(a.proprios)],
-        ['Parcelas até o fim do plano', f(a.totalParcelas)],
+        ['Parcela atual pós-contemplação', f(a.parcelaPos), 'acento-valor'],
+        ['Retorno mensal de locação (' + C.fmtNum(C.REGRAS.locacaoPct, 1) + '%)', f(a.locacao)],
         ['Total desembolsado', f(a.desembolso), 'realce'],
         ['Custo da aquisição', f(a.custo)],
         ['Prazo total', a.prazoEfetivo + ' meses']
@@ -736,18 +770,134 @@
     $('#proposta').innerHTML = prop.html;
     const nota = (erros.length ? '<p class="aviso">Há ' + erros.length + ' erro(s) de preenchimento. Os itens afetados aparecem como "Não calculado".</p>' : '') +
       (prop.semWhatsapp ? '<p class="aviso">O botão "Falar no WhatsApp" da página 3 está sem número: informe o WhatsApp do especialista em js/config.js.</p>' : '');
-    const primeiro = lead.split(/\s+/)[0];
+    const envio = '<div class="envio"><div><b>Enviar ao cliente</b><p>Clique em <b>Gerar proposta</b>: o PDF é baixado e a mensagem para o WhatsApp de ' + esc(s.contato.cliente) + ' fica pronta para copiar.</p></div>' +
+      '<button type="button" class="botao-whats" data-gerar-proposta>Gerar proposta</button></div>' +
+      '<div class="mensagem-envio" hidden><div class="mensagem-topo"><b>Mensagem para o WhatsApp</b><button type="button" class="botao-copiar" data-copiar-msg>Copiar mensagem</button></div>' +
+      '<textarea readonly rows="12" aria-label="Mensagem para o WhatsApp">' + esc(mensagemWhatsapp(s, r)) + '</textarea></div>';
+    const fundo = janela('<h2>Prévia da proposta</h2>' + nota + envio + '<div class="previa">' + prop.html + '</div>', [{ texto: 'Fechar' }], true);
+    const botao = fundo.querySelector('[data-gerar-proposta]');
+    const caixa = fundo.querySelector('.mensagem-envio');
+    const texto = caixa.querySelector('textarea');
+    fundo.querySelector('[data-copiar-msg]').addEventListener('click', () => copiarMensagem(texto));
+    botao.addEventListener('click', async () => {
+      caixa.hidden = false;
+      botao.disabled = true;
+      botao.textContent = 'Gerando PDF…';
+      try {
+        const blob = await gerarPdfArquivo(prop.html);
+        await baixarArquivo(blob, 'Proposta_' + nomeArquivo(lead) + '_' + prop.data.replace(/\//g, '-') + '.pdf');
+        avisar('PDF gerado. Copie a mensagem e envie ao cliente com o arquivo.');
+      } catch (e) {
+        if (e && e.code === 'declined') avisar('Download cancelado.');
+        else if (!window.MODO_ARTIFACT) { avisar('Não foi possível gerar o arquivo automaticamente; use "Salvar em PDF" na impressão.'); imprimir(lead, prop.data); }
+        else avisar('Não foi possível baixar o PDF nesta versão on-line. Use o arquivo index.html do simulador.');
+      }
+      botao.disabled = false;
+      botao.textContent = 'Gerar proposta';
+      copiarMensagem(texto, true);
+    });
+  }
+
+  /** Mensagem curta para o WhatsApp: primeiro nome em negrito, dados do plano em destaque e reforço do Lance Fidelidade. */
+  function mensagemWhatsapp(s, r) {
+    const p = s.plano;
     const R = r.resumo;
-    const msg = 'Olá, ' + primeiro + '! Segue a sua proposta de consórcio' +
-      (C.isNum(R.credito.v) ? ': crédito de ' + C.fmtBRL(R.credito.v) : '') +
-      (C.isNum(R.parcelaInicial.v) ? ', parcela inicial de ' + C.fmtBRL(R.parcelaInicial.v) : '') +
-      (C.isNum(R.prazo.v) ? ' em ' + R.prazo.v + ' meses' : '') + '. Envio o PDF com todos os detalhes em seguida.';
-    const envio = '<div class="envio"><div><b>Enviar ao cliente</b><p>1. Salve o PDF. 2. Abra a conversa com ' + esc(s.contato.cliente) + ' e anexe o arquivo.</p></div>' +
-      '<a class="botao-whats" href="https://wa.me/' + foneCliente + '?text=' + encodeURIComponent(msg) + '" target="_blank" rel="noopener">Abrir conversa no WhatsApp</a></div>';
-    const notaArtifact = window.MODO_ARTIFACT ? '<p class="nota">Nesta versão on-line a impressão está bloqueada. Para salvar em PDF, abra o arquivo <b>index.html</b> do simulador no navegador e use "Salvar em PDF".</p>' : '';
-    const botoes = [{ texto: 'Fechar' }];
-    if (!window.MODO_ARTIFACT) botoes.push({ texto: 'Salvar em PDF', primario: true, acao: () => { imprimir(lead, prop.data); } });
-    janela('<h2>Prévia da proposta</h2>' + nota + notaArtifact + envio + '<div class="previa">' + prop.html + '</div>', botoes, true);
+    const primeiro = String(p.lead || '').trim().split(/\s+/)[0] || '';
+    const v = (x) => (C.isNum(x) ? C.fmtBRL(x) : '—');
+    const linhas = [
+      'Olá, *' + primeiro + '*! Tudo bem?',
+      '',
+      'Conforme conversamos, segue abaixo o PDF da proposta apresentada em reunião. Os destaques:',
+      '',
+      '🏷️ *Consórcio de ' + C.CATEGORIAS[p.categoria].nome + '*',
+      '💰 Crédito: *' + v(R.credito.v) + '*',
+      '📅 Prazo: *' + (C.isNum(R.prazo.v) ? R.prazo.v + ' meses' : '—') + '*',
+      '🏢 Administradora: *' + (p.administradora || '—') + '*',
+      '💳 Parcela inicial: *' + v(R.parcelaInicial.v) + '*'
+    ];
+    const fid = (r.fidelidade || []).filter((f) => f.nucleo.ok);
+    if (fid.length) {
+      linhas.push('', '⭐ *Bônus Fidelidade* (lance 100% embutido, com o próprio crédito):');
+      fid.forEach((f) => linhas.push('• ' + f.parcela + 'ª parcela: *' + v(f.nucleo.embutido) + '* (' + C.fmtNum(f.pct, Number.isInteger(f.pct) ? 0 : 2) + '%)'));
+    }
+    linhas.push('', 'Qualquer dúvida, estou à disposição! 😉');
+    return linhas.join('\n');
+  }
+
+  function copiarMensagem(texto, silencioso) {
+    const ok = () => { if (!silencioso) avisar('Mensagem copiada. É só colar no WhatsApp.'); };
+    const manual = () => { texto.focus(); texto.select(); if (!silencioso) avisar('Selecione e copie a mensagem (Ctrl+C).'); };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(texto.value).then(ok, manual);
+      else { texto.select(); if (document.execCommand('copy')) ok(); else manual(); }
+    } catch (e) { manual(); }
+  }
+
+  // Geração do arquivo PDF no navegador (html2canvas + jsPDF, carregados sob demanda)
+  // Cópias locais em js/vendor (funciona sem internet); a versão on-line usa o CDN
+  const LIBS_PDF = [
+    { global: 'html2canvas', local: 'js/vendor/html2canvas.min.js', cdn: 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js' },
+    { global: 'jspdf', local: 'js/vendor/jspdf.umd.min.js', cdn: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js' }
+  ];
+  function carregarScript(src) {
+    return new Promise((ok, erro) => {
+      const el = document.createElement('script');
+      el.src = src;
+      el.onload = ok;
+      el.onerror = () => { el.remove(); erro(new Error('Falha ao carregar ' + src)); };
+      document.head.appendChild(el);
+    });
+  }
+  async function carregarLib(lib) {
+    if (window[lib.global]) return;
+    if (!window.MODO_ARTIFACT) { try { await carregarScript(lib.local); if (window[lib.global]) return; } catch (e) { /* tenta o CDN */ } }
+    await carregarScript(lib.cdn);
+  }
+
+  async function gerarPdfArquivo(html) {
+    for (const lib of LIBS_PDF) await carregarLib(lib);
+    if (document.fonts && document.fonts.ready) await document.fonts.ready;
+    const area = document.createElement('div');
+    area.className = 'pdf-render';
+    area.innerHTML = html;
+    document.body.appendChild(area);
+    try {
+      const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true });
+      const paginas = area.querySelectorAll('.pdf-pagina');
+      for (let i = 0; i < paginas.length; i++) {
+        const pg = paginas[i];
+        const canvas = await window.html2canvas(pg, { scale: 2, backgroundColor: '#101010', logging: false, useCORS: true });
+        if (i) doc.addPage();
+        doc.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, 297);
+        // Mantém os links (botão do WhatsApp) clicáveis no PDF
+        const base = pg.getBoundingClientRect();
+        const kx = 210 / base.width, ky = 297 / base.height;
+        pg.querySelectorAll('a[href]').forEach((a) => {
+          const q = a.getBoundingClientRect();
+          doc.link((q.left - base.left) * kx, (q.top - base.top) * ky, q.width * kx, q.height * ky, { url: a.href });
+        });
+      }
+      return doc.output('blob');
+    } finally {
+      area.remove();
+    }
+  }
+
+  async function baixarArquivo(blob, nome) {
+    if (window.MODO_ARTIFACT) {
+      const downloads = window.claude && window.claude.use ? await window.claude.use('downloads') : null;
+      if (!downloads) throw { code: 'unavailable' };
+      await downloads.save({ filename: nome, data: blob });
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nome;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
   }
 
   // ---------------------------------------------------------------------------

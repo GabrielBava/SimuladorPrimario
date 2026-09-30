@@ -57,6 +57,7 @@
   const REGRAS = {
     periodicidadeReajuste: 12, // reajuste a cada 12 meses (mês 13, 25, ...) até o fim do plano
     vendaPct: 20, // venda da carta contemplada: 20% sobre o crédito líquido disponível
+    locacaoPct: 1.6, // retorno mensal de locação: 1,6% ao mês sobre o crédito disponível
     seguroPctPadrao: 0.038, // seguro prestamista: % ao mês sobre o crédito atualizado
     embutidoPctPadrao: 25,
     fixoPctPadrao: 50
@@ -111,6 +112,8 @@
       projecoes: { parcelas: false, credito: false, rentabilidade: false },
       // Lance Fidelidade: desabilitado ao iniciar; cada opção tem parcela inicial e % de embutido
       fidelidade: { ativo: false, p1Parcela: 6, p1Pct: 30, p2Parcela: 12, p2Pct: 27, p3Parcela: 18, p3Pct: 25 },
+      // Mecanismo de Alavancagem: reaplica a venda (ou o lucro) da carta em novas cartas do mesmo plano
+      mecanismo: { ativo: false, base: 'venda', origem: 'sorteio', q1: 1, q2: 2, q3: null, q4: null, mesNovas: 12 },
       contato: { cliente: '' } // WhatsApp do cliente que recebe a proposta
     };
   }
@@ -491,6 +494,17 @@
         if (!isNum(pc) || pc < 0 || pc > 100) add('erro', 'fidelidade.p' + i + 'Pct', 'Lance Fidelidade ' + i + ': percentual inválido (0 a 100%).');
       });
     }
+    const mec = s.mecanismo;
+    if (mec && mec.ativo) {
+      const m2 = num(mec.mesNovas);
+      if (!isNum(m2) || m2 < 1 || !Number.isInteger(m2) || (isNum(N) && m2 > N)) add('erro', 'mecanismo.mesNovas', 'Mecanismo de Alavancagem: mês de contemplação das novas cartas deve estar entre 1 e o prazo.');
+      [1, 2, 3, 4].forEach((i) => {
+        const q = mec['q' + i];
+        if (q !== null && q !== '' && q !== undefined && (!isNum(num(q)) || num(q) < 1 || !Number.isInteger(num(q)))) add('erro', 'mecanismo.q' + i, 'Mecanismo de Alavancagem: quantidade de cartas do cenário ' + i + ' deve ser um número inteiro (1 ou mais).');
+      });
+      if (!mec.q1 && !mec.q2 && !mec.q3 && !mec.q4) add('aviso', 'mecanismo.q1', 'Mecanismo de Alavancagem: informe a quantidade de cartas em pelo menos um cenário.');
+      if (mec.origem === 'embutido' && !l.embutidoAtivo) add('aviso', 'mecanismo.origem', 'Mecanismo de Alavancagem: lance embutido desativado; a origem usada é o sorteio.');
+    }
     if (l.fgtsAtivo && !isNum(num(l.fgtsValor))) add('erro', 'lances.fgtsValor', 'FGTS ativado: informe o valor disponível.');
     if (l.embutidoAtivo) pctOk('embutidoPct', 'Lance embutido');
     if (l.fixoAtivo) pctOk('fixoPct', 'Lance fixo');
@@ -679,6 +693,8 @@
     out.desembolso = n.totalPlano + n.proprios;
     out.custo = out.desembolso - n.credLiquido;
     out.custoPct = n.credLiquido > 0 ? (out.custo / n.credLiquido) * 100 : null;
+    out.parcelaPos = n.parcelaPosAtual;
+    out.locacao = (REGRAS.locacaoPct / 100) * n.credLiquido;
     out.cetMes = isNum(i) ? i * 100 : null;
     out.cetAno = isNum(i) ? (Math.pow(1 + i, 12) - 1) * 100 : null;
     return out;
@@ -696,6 +712,60 @@
       const pct = num(f['p' + i + 'Pct']);
       return { i, nome: 'Fidelidade ' + i, parcela, pct, nucleo: nucleo(s, 'fidelidade', parcela, pct) };
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Mecanismo de Alavancagem: a venda (ou o lucro) da carta no mês da projeção de contemplação
+  // é reaplicada em novas cartas com as mesmas características do plano; cada nova carta é
+  // contemplada e vendida no mês informado.
+  // ---------------------------------------------------------------------------
+
+  function mecanismo(s) {
+    const m = s.mecanismo;
+    if (!m || !m.ativo) return null;
+    const origem = m.origem === 'embutido' && s.lances.embutidoAtivo ? 'embutido' : 'sorteio';
+    const base = m.base === 'lucro' ? 'lucro' : 'venda';
+    const out = { ok: false, base, origem, nomeOrigem: NOMES_MOD[origem], pend: [], cenarios: [] };
+    const n0 = nucleo(s, origem);
+    if (!n0.ok) { out.pend = n0.pend; return out; }
+    out.mesOrigem = n0.mesC;
+    out.vendaOrigem = n0.venda;
+    out.lucroOrigem = n0.resultado;
+    const bruto = base === 'lucro' ? n0.resultado : n0.venda;
+    out.capital = isNum(bruto) ? Math.max(0, bruto) : null;
+    const b = basicos(s);
+    const m2 = num(m.mesNovas);
+    if (!isNum(m2) || !Number.isInteger(m2) || m2 < 1 || m2 > b.N) { out.pend.push('Mês de contemplação das novas cartas inválido'); return out; }
+    const nova = nucleo(s, 'sorteio', m2);
+    if (!nova.ok || !isNum(out.capital)) { out.pend = out.pend.concat(nova.pend); return out; }
+    out.ok = true;
+    out.mesNovas = m2;
+    out.carta = { credito: nova.credBruto, credLiquido: nova.credLiquido, parcela: nova.linhas[0].total, aporte: nova.totalAportado, venda: nova.venda };
+    [1, 2, 3, 4].forEach((i) => {
+      const q = num(m['q' + i]);
+      if (!isNum(q) || q < 1 || !Number.isInteger(q)) return;
+      const aporte = q * nova.totalAportado;
+      const coberto = Math.min(out.capital, aporte);
+      // Meses de parcelas pagos só com o capital
+      let acum = 0, meses = 0;
+      for (let k = 0; k < m2; k++) { const p = q * (nova.linhas[k].total || 0); if (acum + p > out.capital + 1e-6) break; acum += p; meses++; }
+      const venda = q * nova.venda;
+      out.cenarios.push({
+        i, q,
+        credito: q * nova.credBruto,
+        parcelaInicial: q * nova.linhas[0].total,
+        aporte,
+        coberto,
+        adicional: aporte - coberto,
+        sobra: out.capital - coberto,
+        mesesCobertos: meses,
+        venda,
+        lucro: venda - aporte,
+        // patrimônio ao fim: venda das novas cartas + capital que sobrou
+        patrimonio: venda + (out.capital - coberto)
+      });
+    });
+    return out;
   }
 
   // ---------------------------------------------------------------------------
@@ -737,17 +807,19 @@
     const b = basicos(s);
     const baseLance = nucleos.sorteio && nucleos.sorteio.ok ? nucleos.sorteio.credBruto : null;
     const fid = fidelidade(s);
+    const mec = mecanismo(s);
     const valor = (pct) => (isNum(baseLance) && isNum(num(pct)) ? (num(pct) / 100) * baseLance : null);
     return {
       validacoes,
       resumo: resumo(s, nucleos.sorteio),
       cenarios,
-      valoresLance: Object.assign({ embutido: valor(s.lances.embutidoPct), fixo: valor(s.lances.fixoPct), livre: valor(s.lances.livrePct) },
+      valoresLance: Object.assign({ embutido: valor(s.lances.embutidoPct), fixo: valor(s.lances.fixoPct), livre: valor(s.lances.livrePct), mecCapital: mec ? mec.capital : null },
         ...fid.map((f) => ({ ['fid' + f.i]: f.nucleo.ok ? f.nucleo.embutido : null }))),
       baseLance,
       projecoes: projecoes(s, nucleos),
       alavancagem: alavancagem(s),
       fidelidade: fid,
+      mecanismo: mec,
       aquisicao: ['sorteio'].concat(s.lances.embutidoAtivo ? ['embutido'] : []).map((m) => aquisicao(s, m)),
       premissas: premissas(s),
       pontosConfirmar: pontosConfirmar(s),
@@ -757,7 +829,7 @@
   }
 
   return {
-    redutorNaParcelaToda, INDICES, CATEGORIAS, ADMINISTRADORAS, MODALIDADES_PARCELA, REGRAS, MSG, NOMES_MOD,
+    mecanismo, redutorNaParcelaToda, INDICES, CATEGORIAS, ADMINISTRADORAS, MODALIDADES_PARCELA, REGRAS, MSG, NOMES_MOD,
     estadoPadrao, aplicarCategoria, simular, nucleo, aquisicao, tirMensal, vpl, cenario, validar, fator, qtdReajustes, parcelaDataBase, redutorPct,
     nomeIndice, taxaIndice, indiceEstimado, lanceSobre,
     fmtBRL, fmtPct, fmtNum, num, isNum

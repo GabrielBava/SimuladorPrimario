@@ -578,3 +578,24 @@ button, input, select, textarea { font: inherit; letter-spacing: inherit; }
 .forma-sub { display: block; font-family: var(--fonte); font-size: .74rem; font-weight: 500; color: var(--suave); letter-spacing: 0; margin-top: 2px; }
 
 .pdf-cartao h3 .pdf-sub { display: block; font-family: var(--fonte); font-size: 9.5px; font-weight: 500; color: var(--suave); margin-top: 2px; }
+
+/* Mecanismo de Alavancagem */
+.mec-capital { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin: 4px 0 14px; }
+.mec-capital > div { border: 1px solid var(--borda); border-radius: 12px; padding: 12px 14px; background: var(--cartao); display: flex; flex-direction: column; gap: 2px; }
+.mec-capital span { font-size: .78rem; color: var(--suave); }
+.mec-capital b { font-family: var(--fonte-mono); font-size: 1.25rem; color: var(--acento, #1dc077); }
+.mec-capital small { font-size: .74rem; color: var(--suave); }
+.mec-nota { margin-top: 10px; }
+.forma-linha.negativo-valor b { color: #ff6b6b; }
+
+/* Geração do PDF (área fora da tela) e mensagem para o WhatsApp */
+.pdf-render { position: fixed; left: -10000px; top: 0; width: 210mm; pointer-events: none; }
+.pdf-render .pdf-pagina { margin: 0; }
+button.botao-whats { border: 0; cursor: pointer; font: inherit; font-weight: 600; font-size: .88rem; }
+button.botao-whats:disabled { opacity: .7; cursor: progress; }
+.mensagem-envio { margin: -4px 0 14px; padding: 12px 14px; border: 1px solid var(--borda); border-radius: 12px; background: var(--cartao); }
+.mensagem-topo { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.mensagem-topo b { font-family: var(--fonte-display); }
+.mensagem-envio textarea { width: 100%; box-sizing: border-box; resize: vertical; font: .86rem/1.45 var(--fonte); color: var(--texto); background: var(--fundo); border: 1px solid var(--borda); border-radius: 10px; padding: 10px 12px; }
+.botao-copiar { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--acento-borda); background: transparent; color: var(--acento); font-weight: 600; cursor: pointer; }
+.botao-copiar:hover { background: var(--acento-suave); }

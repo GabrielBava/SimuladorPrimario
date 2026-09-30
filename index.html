@@ -177,7 +177,37 @@
       </div>
     </details>
 
-    <!-- 4. Projeções -->
+    <!-- 5. Mecanismo de Alavancagem (opcional) -->
+    <details class="secao" open data-secao="mecanismo">
+      <summary>Mecanismo de Alavancagem</summary>
+      <label class="chk chk-titulo linha-habilitar"><input type="checkbox" id="f-mecanismoAtivo" data-k="mecanismo.ativo"> Habilitar Mecanismo de Alavancagem</label>
+      <div data-show="mecanismo.ativo">
+        <div class="grid2">
+          <label class="f"><span>Reaplicar</span>
+            <select id="f-mecBase" data-k="mecanismo.base">
+              <option value="venda">Valor de venda</option>
+              <option value="lucro">Lucro</option>
+            </select></label>
+          <label class="f"><span>Carta de origem</span>
+            <select id="f-mecOrigem" data-k="mecanismo.origem">
+              <option value="sorteio">Sorteio</option>
+              <option value="embutido">Lance Embutido</option>
+            </select></label>
+        </div>
+        <label class="f"><span>Capital para reaplicar (R$)</span><output class="valor-travado" id="v-mecCapital" data-valor="mecCapital" aria-live="polite">—</output></label>
+        <small class="nota">No mês da projeção de contemplação dos dados do plano. As novas cartas seguem as mesmas características do plano.</small>
+        <div class="titulo-fid">Quantidade de cartas por cenário</div>
+        <div class="grid2">
+          <label class="f"><span>Cenário 1</span><input type="number" id="f-mecQ1" data-k="mecanismo.q1" min="1" step="1" placeholder="—"></label>
+          <label class="f"><span>Cenário 2</span><input type="number" id="f-mecQ2" data-k="mecanismo.q2" min="1" step="1" placeholder="—"></label>
+          <label class="f"><span>Cenário 3</span><input type="number" id="f-mecQ3" data-k="mecanismo.q3" min="1" step="1" placeholder="—"></label>
+          <label class="f"><span>Cenário 4</span><input type="number" id="f-mecQ4" data-k="mecanismo.q4" min="1" step="1" placeholder="—"></label>
+        </div>
+        <label class="f"><span>Contemplação das novas cartas (mês)</span><input type="number" id="f-mecMes" data-k="mecanismo.mesNovas" min="1" step="1"></label>
+      </div>
+    </details>
+
+    <!-- 6. Projeções -->
     <details class="secao" open data-secao="projecoes">
       <summary>Projeções</summary>
       <p class="nota">Gráficos exibidos na tela e no PDF.</p>

@@ -275,3 +275,38 @@ test('HS: meia parcela divide fundo comum + taxa adm. + fundo de reserva; demais
   near(somaBase('taxa'), 20000);
   near(somaBase('fundo'), 2000);
 });
+
+test('Mecanismo de Alavancagem: reaplica a venda (ou o lucro) da carta em novas cartas do mesmo plano', () => {
+  const s = base(); // 100.000 / 100 meses / 20% / 2% → parcela 1.220; contemplação no mês 12
+  assert.equal(Calc.estadoPadrao().mecanismo.ativo, false);
+  assert.equal(Calc.simular(s).mecanismo, null);
+  Object.assign(s.mecanismo, { ativo: true, base: 'venda', q1: 1, q2: 2, q3: null, q4: null, mesNovas: 12 });
+  const M = Calc.simular(s).mecanismo;
+  assert.ok(M.ok);
+  near(M.capital, 20000, 'venda de 20% do crédito no mês 12');
+  near(M.carta.aporte, 12 * 1220);
+  assert.deepEqual(M.cenarios.map((c) => c.q), [1, 2]);
+  const [c1, c2] = M.cenarios;
+  near(c1.credito, 100000);
+  near(c1.venda, 20000);
+  near(c1.lucro, 20000 - 14640);
+  near(c1.sobra, 20000 - 14640);
+  assert.equal(c1.mesesCobertos, 12);
+  near(c2.aporte, 29280);
+  near(c2.adicional, 29280 - 20000);
+  assert.equal(c2.mesesCobertos, 8); // 8 × 2.440 = 19.520 ≤ 20.000
+  near(c2.patrimonio, 40000);
+  s.mecanismo.base = 'lucro';
+  near(Calc.simular(s).mecanismo.capital, 20000 - 14640);
+  s.mecanismo.mesNovas = 6;
+  const m6 = Calc.simular(s).mecanismo;
+  near(m6.carta.aporte, 6 * 1220, 'novas cartas vendidas no mês informado');
+});
+
+test('aquisição: parcela pós-contemplação e retorno mensal de locação de 1,6% do crédito disponível', () => {
+  const s = base();
+  s.lances.embutidoAtivo = true;
+  const a = Calc.aquisicao(s, 'embutido');
+  near(a.locacao, 0.016 * 75000);
+  near(a.parcelaPos, Calc.nucleo(s, 'embutido').parcelaPosAtual);
+});
