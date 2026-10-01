@@ -310,3 +310,22 @@ test('aquisição: parcela pós-contemplação e retorno mensal de locação de 
   near(a.locacao, 0.016 * 75000);
   near(a.parcelaPos, Calc.nucleo(s, 'embutido').parcelaPosAtual);
 });
+
+test('plano cadastrado: aplica crédito mínimo, prazo, taxas, lances e índice', () => {
+  const pl = Calc.normalizarPlano({ codigo: 77, adm: 'Embracon', descricao: 'Auto 80', tipo: 'Veículo', credito_minimo: 90000, prazo_grupo: 80, taxa_adm: 15, fundo_reserva: 3, lance_embutido: 30, lance_fixo: 40, indice_reajuste: 'IPCA' });
+  assert.deepEqual([pl.id, pl.administradora, pl.categoria, pl.indice], ['77', 'Embracon', 'veiculo', 'ipca']);
+  const s = Calc.estadoPadrao();
+  s.plano.lead = 'Teste';
+  s.plano.mesContemplacao = 90;
+  Calc.aplicarPlanoCadastrado(s, pl);
+  const p = s.plano;
+  assert.deepEqual([p.planoId, p.administradora, p.categoria, p.prazo, p.taxaAdm, p.fundoReserva, p.indice, p.creditoMinimo],
+    ['77', 'Embracon', 'veiculo', 80, 15, 3, 'ipca', 90000]);
+  assert.equal(p.credito, 90000, 'crédito parte do mínimo do plano');
+  assert.equal(p.mesContemplacao, 80, 'contemplação limitada ao prazo');
+  assert.deepEqual([s.lances.embutidoPct, s.lances.fixoPct], [30, 40]);
+  p.credito = 50000;
+  assert.ok(Calc.validar(s).some((v) => v.campo === 'plano.credito' && /mínimo/.test(v.msg)));
+  assert.equal(Calc.normalizarIndice('Pré-fixado 6%'), 'pre6');
+  assert.equal(Calc.normalizarPlano({ nome: 'sem id' }), null);
+});

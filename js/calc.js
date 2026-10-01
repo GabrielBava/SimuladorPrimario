@@ -45,6 +45,66 @@
     return plano;
   }
 
+  // ---------------------------------------------------------------------------
+  // Planos cadastrados (CRM): cada plano traz administradora, crédito mínimo, prazo,
+  // taxas, percentuais de lance e índice. Aceita nomes de campos usuais do CRM.
+  // ---------------------------------------------------------------------------
+
+  function normalizarIndice(v) {
+    const t = String(v == null ? '' : v).trim().toLowerCase();
+    if (!t) return null;
+    if (INDICES[t]) return t;
+    for (const k of ['incc', 'ipca', 'inpc']) if (t.includes(k)) return k;
+    if (/pr[eé]/.test(t) && /6/.test(t)) return 'pre6';
+    if (/pr[eé]/.test(t)) return 'pre5';
+    return 'outro';
+  }
+
+  function normalizarPlano(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const pega = (...ks) => { for (const k of ks) if (raw[k] !== undefined && raw[k] !== null && raw[k] !== '') return raw[k]; return null; };
+    const n = (...ks) => num(pega(...ks));
+    const id = pega('id', 'codigo', 'planoId');
+    const administradora = pega('administradora', 'adm');
+    if (id === null || !administradora) return null;
+    const cat = String(pega('categoria', 'tipo') || '').toLowerCase();
+    return {
+      id: String(id),
+      nome: String(pega('nome', 'descricao', 'plano') || 'Plano ' + id),
+      administradora: String(administradora).trim(),
+      categoria: /ve[ií]c|auto|moto/.test(cat) ? 'veiculo' : /im[oó]v/.test(cat) ? 'imovel' : null,
+      creditoMinimo: n('creditoMinimo', 'credito_minimo', 'credito'),
+      prazo: n('prazo', 'prazoGrupo', 'prazo_grupo'),
+      taxaAdm: n('taxaAdm', 'taxaAdministrativa', 'taxa_adm', 'taxaAdministracao'),
+      fundoReserva: n('fundoReserva', 'fundo_reserva'),
+      embutidoPct: n('embutidoPct', 'lanceEmbutido', 'lance_embutido'),
+      fixoPct: n('fixoPct', 'lanceFixo', 'lance_fixo'),
+      indice: normalizarIndice(pega('indice', 'indiceReajuste', 'indice_reajuste')),
+      indiceTaxa: n('indiceTaxa', 'taxaIndice', 'taxa_indice'),
+      exemplo: !!raw.exemplo
+    };
+  }
+
+  /** Aplica o plano cadastrado ao estado: dados do plano, percentuais de lance e índice. */
+  function aplicarPlanoCadastrado(s, pl) {
+    const p = s.plano;
+    p.planoId = pl.id;
+    p.administradora = pl.administradora;
+    if (pl.categoria) p.categoria = pl.categoria;
+    if (isNum(pl.prazo)) p.prazo = pl.prazo;
+    if (isNum(pl.taxaAdm)) p.taxaAdm = pl.taxaAdm;
+    if (isNum(pl.fundoReserva)) p.fundoReserva = pl.fundoReserva;
+    if (pl.indice) p.indice = pl.indice;
+    if (isNum(pl.indiceTaxa)) p.indiceTaxa = pl.indiceTaxa;
+    p.creditoMinimo = isNum(pl.creditoMinimo) ? pl.creditoMinimo : null;
+    // Crédito: parte do crédito mínimo do plano (pode ser aumentado depois)
+    if (isNum(pl.creditoMinimo)) p.credito = pl.creditoMinimo;
+    if (isNum(num(p.prazo)) && isNum(num(p.mesContemplacao)) && num(p.mesContemplacao) > num(p.prazo)) p.mesContemplacao = num(p.prazo);
+    if (isNum(pl.embutidoPct)) s.lances.embutidoPct = pl.embutidoPct;
+    if (isNum(pl.fixoPct)) s.lances.fixoPct = pl.fixoPct;
+    return s;
+  }
+
   const ADMINISTRADORAS = ['HS', 'Embracon', 'CNP', 'Itaú', 'Porto Seguro', 'Servopa', 'Banco do Brasil', 'Santander', 'Klubi'];
 
   const MODALIDADES_PARCELA = {
@@ -79,6 +139,8 @@
         lead: '',
         categoria: 'imovel',
         administradora: '',
+        planoId: '', // plano cadastrado (CRM) aplicado aos campos
+        creditoMinimo: null, // crédito mínimo do plano cadastrado
         credito: CATEGORIAS.imovel.credito,
         prazo: CATEGORIAS.imovel.prazo,
         mesContemplacao: 12,
@@ -444,6 +506,7 @@
     const p = s.plano;
     const C = num(p.credito), N = num(p.prazo);
     if (!String(p.lead || '').trim()) add('erro', 'plano.lead', 'Campo obrigatório: nome completo.');
+    if (isNum(num(p.creditoMinimo)) && isNum(C) && C < num(p.creditoMinimo)) add('erro', 'plano.credito', 'Crédito abaixo do mínimo do plano selecionado (' + fmtBRL(num(p.creditoMinimo)) + ').');
     if (!p.administradora) add('info', 'plano.administradora', 'Administradora não selecionada.');
     if (!isNum(C)) add('erro', 'plano.credito', 'Campo obrigatório: valor do crédito.');
     else if (C <= 0) add('erro', 'plano.credito', 'O valor do crédito deve ser maior que zero.');
@@ -829,7 +892,7 @@
   }
 
   return {
-    mecanismo, redutorNaParcelaToda, INDICES, CATEGORIAS, ADMINISTRADORAS, MODALIDADES_PARCELA, REGRAS, MSG, NOMES_MOD,
+    normalizarPlano, aplicarPlanoCadastrado, normalizarIndice, mecanismo, redutorNaParcelaToda, INDICES, CATEGORIAS, ADMINISTRADORAS, MODALIDADES_PARCELA, REGRAS, MSG, NOMES_MOD,
     estadoPadrao, aplicarCategoria, simular, nucleo, aquisicao, tirMensal, vpl, cenario, validar, fator, qtdReajustes, parcelaDataBase, redutorPct,
     nomeIndice, taxaIndice, indiceEstimado, lanceSobre,
     fmtBRL, fmtPct, fmtNum, num, isNum

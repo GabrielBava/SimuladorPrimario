@@ -79,9 +79,72 @@
   // Menu lateral: preenchimento, leitura e visibilidade
   // ---------------------------------------------------------------------------
 
+  // Planos cadastrados: vêm do CRM (CONFIG_SIMULADOR.planosUrl) ou da lista em js/config.js
+  let planos = [];
+  function definirPlanos(lista) {
+    planos = (Array.isArray(lista) ? lista : []).map(C.normalizarPlano).filter(Boolean);
+  }
+  const planoPorId = (id) => planos.find((x) => x.id === String(id)) || null;
+
   function preencherSelects() {
     $$('.sel-indice').forEach((s) => { s.innerHTML = Object.entries(C.INDICES).map(([k, v]) => '<option value="' + k + '">' + esc(v.nome) + '</option>').join(''); });
-    $$('.sel-administradora').forEach((s) => { s.innerHTML = '<option value="">Selecione</option>' + C.ADMINISTRADORAS.map((a) => '<option value="' + esc(a) + '">' + esc(a) + '</option>').join(''); });
+    const adms = C.ADMINISTRADORAS.concat(planos.map((x) => x.administradora).filter((a) => !C.ADMINISTRADORAS.includes(a)));
+    const atual = estado && estado.plano.administradora;
+    if (atual && !adms.includes(atual)) adms.push(atual);
+    $$('.sel-administradora').forEach((s) => { s.innerHTML = '<option value="">Selecione</option>' + adms.map((a) => '<option value="' + esc(a) + '">' + esc(a) + '</option>').join(''); });
+    preencherPlanos();
+  }
+
+  /** Lista os planos da administradora selecionada. */
+  function preencherPlanos() {
+    const sel = $('#f-plano');
+    if (!sel) return;
+    const adm = estado ? estado.plano.administradora : '';
+    const daAdm = planos.filter((x) => x.administradora === adm);
+    let ops;
+    if (!adm) ops = '<option value="">Selecione a administradora</option>';
+    else if (!daAdm.length) ops = '<option value="">Nenhum plano cadastrado</option>';
+    else ops = '<option value="">Selecione o plano</option>' + daAdm.map((x) => '<option value="' + esc(x.id) + '">' + esc(x.nome + (x.categoria ? ' · ' + C.CATEGORIAS[x.categoria].nome : '') + (x.exemplo ? ' (exemplo)' : '')) + '</option>').join('');
+    sel.innerHTML = ops;
+    sel.disabled = !daAdm.length;
+    sel.value = estado && daAdm.some((x) => x.id === estado.plano.planoId) ? estado.plano.planoId : '';
+    notaPlano();
+  }
+
+  function notaPlano() {
+    const nota = $('#nota-plano');
+    if (!nota) return;
+    const pl = estado && planoPorId(estado.plano.planoId);
+    nota.hidden = !pl;
+    if (!pl) return;
+    const partes = [];
+    if (C.isNum(pl.creditoMinimo)) partes.push('Crédito mínimo ' + C.fmtBRL(pl.creditoMinimo));
+    if (C.isNum(pl.embutidoPct)) partes.push('Embutido ' + C.fmtNum(pl.embutidoPct, Number.isInteger(pl.embutidoPct) ? 0 : 2) + '%');
+    if (C.isNum(pl.fixoPct)) partes.push('Fixo ' + C.fmtNum(pl.fixoPct, Number.isInteger(pl.fixoPct) ? 0 : 2) + '%');
+    if (pl.indice) partes.push(C.INDICES[pl.indice].nome);
+    nota.textContent = 'Plano aplicado: ' + partes.join(' · ') + '.';
+  }
+
+  async function carregarPlanosCrm() {
+    const url = (window.CONFIG_SIMULADOR || {}).planosUrl;
+    if (!url) return false;
+    try {
+      const resp = await fetch(url, { headers: { Accept: 'application/json' } });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const dados = await resp.json();
+      definirPlanos(Array.isArray(dados) ? dados : dados && dados.planos);
+      return true;
+    } catch (e) {
+      avisar('Não foi possível buscar os planos no CRM; usando os planos do js/config.js.');
+      return false;
+    }
+  }
+
+  function selecionarPlano(id) {
+    const pl = planoPorId(id);
+    if (!pl) { estado.plano.planoId = ''; estado.plano.creditoMinimo = null; return false; }
+    C.aplicarPlanoCadastrado(estado, pl);
+    return true;
   }
 
   function escreverCampos() {
@@ -145,7 +208,19 @@
       if (el.dataset.k === 'plano.categoria') {
         // Valores fixos da categoria (crédito, prazo, taxas e índice); podem ser editados em seguida
         C.aplicarCategoria(estado.plano, estado.plano.categoria);
+        Object.assign(estado.plano, { planoId: '', creditoMinimo: null });
         escreverCampos();
+        preencherPlanos();
+      } else if (el.dataset.k === 'plano.administradora') {
+        // Troca de administradora: o plano cadastrado anterior deixa de valer
+        const pl = planoPorId(estado.plano.planoId);
+        if (pl && pl.administradora !== estado.plano.administradora) Object.assign(estado.plano, { planoId: '', creditoMinimo: null });
+        preencherPlanos();
+      } else if (el.dataset.k === 'plano.planoId') {
+        // Plano cadastrado: crédito mínimo, prazo, taxas, lances e índice preenchidos automaticamente
+        if (selecionarPlano(estado.plano.planoId)) avisar('Plano aplicado: crédito, prazo, taxas, lances e índice atualizados.');
+        escreverCampos();
+        preencherPlanos();
       }
       aplicarVisibilidade();
       atualizar();
@@ -928,21 +1003,41 @@
   estado = salvo ? mesclar(C.estadoPadrao(), salvo) : exemplo();
   // Dados enviados pelo CRM no botão "Gerar proposta" (?nome=...&contato=..., também aceitos depois do #).
   // Preenche apenas o nome completo e o contato do cliente; os demais campos continuam como estavam.
+  let planoCrm = '';
+  definirPlanos((window.CONFIG_SIMULADOR || {}).planos);
   const doCrm = (function () {
     const ler = (txt) => { try { return new URLSearchParams(String(txt || '').replace(/^[?#]/, '')); } catch (e) { return new URLSearchParams(); } };
     const fontes = [ler(location.search), ler(location.hash)];
     const pegar = (k) => { for (const f of fontes) { const v = f.get(k); if (v && v.trim()) return v.trim(); } return ''; };
     const nome = pegar('nome');
+    planoCrm = pegar('plano');
     let fone = pegar('contato').replace(/\D/g, '');
     if (fone.length > 11 && fone.startsWith('55')) fone = fone.slice(2);
     if (nome) estado.plano.lead = nome.slice(0, 80);
     if (fone) estado.contato.cliente = formatarTelefone(fone);
-    return !!(nome || fone);
+    return !!(nome || fone || planoCrm);
   })();
   try { if (localStorage.getItem('simconsorcio.menuOculto') === '1') document.body.classList.add('menu-oculto'); } catch (e) { /* sem armazenamento */ }
+  const aplicarPlanoCrm = (avisarFalta) => {
+    if (!planoCrm) return false;
+    if (selecionarPlano(planoCrm)) return true;
+    if (avisarFalta) avisar('Plano "' + planoCrm + '" enviado pelo CRM não foi encontrado nos planos cadastrados.');
+    return false;
+  };
+  const comUrlCrm = !!(window.CONFIG_SIMULADOR || {}).planosUrl;
   preencherSelects();
+  let planoAplicado = aplicarPlanoCrm(!comUrlCrm);
   ligarMenu();
   escreverCampos();
+  preencherSelects();
   atualizar();
-  if (doCrm) avisar('Nome e contato do cliente preenchidos pelo CRM.');
+  if (doCrm) avisar(planoAplicado ? 'Cliente e plano preenchidos pelo CRM.' : 'Nome e contato do cliente preenchidos pelo CRM.');
+  // Planos do CRM (quando configurado): atualiza a lista e reaplica o plano pedido no link
+  carregarPlanosCrm().then((ok) => {
+    if (!ok) { if (comUrlCrm && !planoAplicado) aplicarPlanoCrm(true); return; }
+    if (!planoAplicado && planoCrm) { planoAplicado = aplicarPlanoCrm(true); if (planoAplicado) avisar('Plano preenchido pelo CRM.'); }
+    preencherSelects();
+    escreverCampos();
+    atualizar();
+  });
 })();

@@ -1,6 +1,6 @@
 # Especificação funcional — Simulador de Cartas de Consórcio Primárias
 
-Versão 2.6 · Implementação de referência: `index.html`, `js/calc.js` (motor de cálculo) e `js/app.js` (interface).
+Versão 2.7 · Implementação de referência: `index.html`, `js/calc.js` (motor de cálculo) e `js/app.js` (interface).
 
 > **Observação obrigatória:** a simulação depende dos dados do grupo, do contrato, das regras da administradora e das premissas inseridas. Nenhum valor é contratual. Não há garantia de contemplação, venda, lucro, valorização ou rentabilidade.
 
@@ -180,6 +180,21 @@ Cada cartão de lance lembra onde o lance é abatido (parcela ou prazo). No sort
 - **Proposta:** seção "Mecanismo de Alavancagem" logo abaixo da Simulação de Alavancagem, com olho de exibição por cenário. Não entra no PDF.
 - **Simulação de Aquisição:** "Entrada (recursos próprios)" foi trocado por **Parcela atual pós-contemplação**, e "Parcelas até o fim do plano" por **Retorno mensal de locação** = 1,6% × crédito disponível (tela e PDF).
 - **Envio da proposta:** na prévia, o botão "Gerar proposta" baixa o PDF automaticamente (gerado no navegador com html2canvas e jsPDF, em `js/vendor`) e mostra a mensagem pronta para o WhatsApp, já copiada: primeiro nome em negrito, categoria, crédito, prazo, administradora e parcela inicial em destaque, reforço do Lance Fidelidade 1, 2 e 3 (quando habilitado) e aviso de que o PDF da reunião segue abaixo.
+
+### 2.11 Planos cadastrados (v2.7)
+
+- **Menu:** campo **Plano** logo abaixo da Administradora, com os planos cadastrados da administradora selecionada.
+- **Ao selecionar o plano**, são preenchidos automaticamente:
+  - crédito (a partir do crédito mínimo do plano);
+  - prazo do grupo, taxa administrativa e fundo de reserva;
+  - percentuais de lance embutido e lance fixo;
+  - índice de reajuste (e a taxa estimada do índice, quando informada);
+  - categoria (Imóvel/Veículo).
+  Os campos continuam editáveis. Crédito abaixo do mínimo do plano é sinalizado como erro.
+- **Origem dos planos:** `planosUrl` em `js/config.js` (endereço do CRM que devolve os planos em JSON, como lista ou `{ "planos": [...] }`); sem endereço, vale a lista `planos` do mesmo arquivo (hoje com dois planos de exemplo, a substituir).
+- **Campos de cada plano:** `id`, `administradora`, `nome`, `categoria`, `creditoMinimo`, `prazo`, `taxaAdm`, `fundoReserva`, `embutidoPct`, `fixoPct`, `indice`, `indiceTaxa` (opcional). Também aceita os nomes `codigo`, `adm`, `descricao`, `tipo`, `credito_minimo`, `prazo_grupo`, `taxa_adm`, `fundo_reserva`, `lance_embutido`, `lance_fixo`, `indice_reajuste` e `taxa_indice`.
+- **Link do CRM:** além de `nome` e `contato`, aceita `plano=<id>` para já abrir com o plano aplicado.
+- Trocar a categoria ou a administradora desfaz a seleção do plano.
 
 ## 3. Fórmulas
 
