@@ -6,7 +6,8 @@
   <title>[PRONTO] Simulador de Consórcio</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;600;700&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Manrope:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="css/tokens.css">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -14,10 +15,14 @@
 
   <!-- ===================== MENU LATERAL ===================== -->
   <aside class="sidebar" id="sidebar">
+    <div class="marca">
+      <span class="marca-cc" aria-hidden="true">CC</span>
+      <span class="marca-nome"><b>Simulador</b><small>CRM Consórcios</small></span>
+    </div>
     <div class="toolbar">
-      <button type="button" data-acao="pdf" class="primario">Gerar proposta (PDF)</button>
-      <button type="button" data-acao="nova">Nova proposta</button>
-      <button type="button" data-acao="salvar">Salvar proposta</button>
+      <button type="button" data-acao="pdf" class="primario"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7.5Z"/><path d="M14 3v5h5"/><path d="M12 11v6"/><path d="m9 14 3 3 3-3"/></svg>Gerar proposta (PDF)</button>
+      <button type="button" data-acao="nova"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>Nova proposta</button>
+      <button type="button" data-acao="salvar"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg>Salvar proposta</button>
     </div>
 
     <label class="f campo-cliente"><span>Nome completo <em class="req">*</em></span>
@@ -27,7 +32,7 @@
 
     <!-- 1. Dados do plano -->
     <details class="secao" open data-secao="plano">
-      <summary>Dados do plano</summary>
+      <summary><svg class="icone" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7.5Z"/><path d="M14 3v5h5"/><path d="M9 13h6"/><path d="M9 17h6"/><path d="M9 9h1"/></svg>Dados do plano</summary>
       <fieldset class="f segmentado">
         <legend>Categoria</legend>
         <div class="seg-opcoes">
@@ -89,7 +94,7 @@
 
     <!-- 2. Modalidade Parcela -->
     <details class="secao" open data-secao="parcela">
-      <summary>Modalidade Parcela</summary>
+      <summary><svg class="icone" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3 10h18"/><path d="M7 15h3"/></svg>Modalidade Parcela</summary>
       <div class="grid2">
         <label class="f"><span>Modalidade</span>
           <select id="f-modalidade" data-k="parcela.modalidade">
@@ -107,7 +112,7 @@
 
     <!-- 3. Estratégias de Contemplação -->
     <details class="secao" open data-secao="lances">
-      <summary>Estratégia de Lance</summary>
+      <summary><svg class="icone" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>Estratégia de Lance</summary>
       <div class="bloco bloco-fgts">
         <label class="chk chk-titulo"><input type="checkbox" id="f-fgtsAtivo" data-k="lances.fgtsAtivo"> FGTS</label>
         <label class="f" data-show="lances.fgtsAtivo"><span>Valor do FGTS (R$)</span>
@@ -150,7 +155,7 @@
 
     <!-- 4. Lance Fidelidade (opcional) -->
     <details class="secao" open data-secao="fidelidade">
-      <summary>Lance Fidelidade</summary>
+      <summary><svg class="icone" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>Lance Fidelidade</summary>
       <label class="chk chk-titulo linha-habilitar"><input type="checkbox" id="f-fidelidadeAtivo" data-k="fidelidade.ativo"> Habilitar Lance Fidelidade</label>
       <div data-show="fidelidade.ativo">
       <div class="bloco">
@@ -182,7 +187,7 @@
 
     <!-- 5. Mecanismo de Alavancagem (opcional) -->
     <details class="secao" open data-secao="mecanismo">
-      <summary>Mecanismo de Alavancagem</summary>
+      <summary><svg class="icone" viewBox="0 0 24 24" aria-hidden="true"><path d="m22 7-8.5 8.5-5-5L2 17"/><path d="M16 7h6v6"/></svg>Mecanismo de Alavancagem</summary>
       <label class="chk chk-titulo linha-habilitar"><input type="checkbox" id="f-mecanismoAtivo" data-k="mecanismo.ativo"> Habilitar Mecanismo de Alavancagem</label>
       <div data-show="mecanismo.ativo">
         <div class="grid2">
@@ -212,7 +217,7 @@
 
     <!-- 6. Projeções -->
     <details class="secao" open data-secao="projecoes">
-      <summary>Projeções</summary>
+      <summary><svg class="icone" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>Projeções</summary>
       <p class="nota">Gráficos exibidos na tela e no PDF.</p>
       <div class="linha-chk">
         <label class="chk"><input type="checkbox" id="f-projParcelas" data-k="projecoes.parcelas"> Parcelas</label>

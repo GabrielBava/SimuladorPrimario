@@ -1,6 +1,6 @@
 # Especificação funcional — Simulador de Cartas de Consórcio Primárias
 
-Versão 2.7 · Implementação de referência: `index.html`, `js/calc.js` (motor de cálculo) e `js/app.js` (interface).
+Versão 2.8 · Implementação de referência: `index.html`, `js/calc.js` (motor de cálculo) e `js/app.js` (interface).
 
 > **Observação obrigatória:** a simulação depende dos dados do grupo, do contrato, das regras da administradora e das premissas inseridas. Nenhum valor é contratual. Não há garantia de contemplação, venda, lucro, valorização ou rentabilidade.
 
@@ -195,6 +195,20 @@ Cada cartão de lance lembra onde o lance é abatido (parcela ou prazo). No sort
 - **Campos de cada plano:** `id`, `administradora`, `nome`, `categoria`, `creditoMinimo`, `prazo`, `taxaAdm`, `fundoReserva`, `embutidoPct`, `fixoPct`, `indice`, `indiceTaxa` (opcional). Também aceita os nomes `codigo`, `adm`, `descricao`, `tipo`, `credito_minimo`, `prazo_grupo`, `taxa_adm`, `fundo_reserva`, `lance_embutido`, `lance_fixo`, `indice_reajuste` e `taxa_indice`.
 - **Link do CRM:** além de `nome` e `contato`, aceita `plano=<id>` para já abrir com o plano aplicado.
 - Trocar a categoria ou a administradora desfaz a seleção do plano.
+
+### 2.12 Identidade visual do CRM Consórcios (v2.8)
+
+- **Fonte da verdade:** `css/tokens.css`, cópia do arquivo oficial de tokens do CRM (paleta base, temas escuro e claro, tipografia, raios, espaçamentos, sombras e vidro). `css/style.css` só acrescenta tokens derivados (botão principal, fundos suaves de status, anel de foco) e os componentes.
+- **Temas:** escuro por padrão; claro quando o sistema operacional está no modo claro ou quando a pessoa escolhe **Claro** no seletor do topo da proposta (preferência guardada só no navegador). O PDF sai sempre no tema escuro da marca.
+- **Tipografia:** Famels (substituta oficial Manrope) em títulos, números e valores; Poppins em textos, rótulos, menus e botões. Escala `--fs-hero` a `--fs-xs`, sem rótulos em maiúsculas.
+- **Forma e componentes:**
+  - Moldura de vidro sobre luz ambiente, com menu flutuante.
+  - Cards com degradê de 160°; botões, abas e chips em pílula.
+  - Um botão principal por tela (névoa sólida no escuro, azul-noite no claro); ações secundárias em pílula de vidro.
+  - Ícones de traço no estilo Lucide (1,7 px, nunca preenchidos).
+  - Status com as cores dessaturadas da marca: sucesso para resultado positivo, perigo para negativo.
+- **Marca:** monograma provisório "CC" no topo do menu, até o logotipo definitivo. O PDF do cliente não leva a marca interna.
+- **Geração do PDF:** as páginas são montadas fora da tela em escala 2,5× e capturadas a 0,8×. Assim o html2canvas desenha o texto pequeno sem falhas de espaçamento e a resolução final continua a mesma (1588 × 2245 px por página).
 
 ## 3. Fórmulas
 

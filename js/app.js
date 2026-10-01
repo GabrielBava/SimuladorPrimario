@@ -51,14 +51,35 @@
 
   const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const SERIE = { sorteio: 1, embutido: 1, fixo: 1, livre: 1 };
+  // Ícones de traço no estilo Lucide (grade 24×24, traço 1,7, nunca preenchidos)
   const ICONES = {
-    sorteio: '<rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1.3" class="ic-p"/><circle cx="15" cy="15" r="1.3" class="ic-p"/><circle cx="15" cy="9" r="1.3" class="ic-p"/><circle cx="9" cy="15" r="1.3" class="ic-p"/>',
-    embutido: '<path d="M12 4 3 8.5l9 4.5 9-4.5z"/><path d="m3 12.5 9 4.5 9-4.5"/><path d="m3 16.5 9 4.5 9-4.5"/>',
-    fixo: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1" class="ic-p"/>',
-    livre: '<path d="M4 18 10 12l3.5 3.5L20 8"/><path d="M15 8h5v5"/>',
+    sorteio: '<rect x="3.5" y="3.5" width="17" height="17" rx="3.5"/><path d="M8.5 8.5h.01"/><path d="M15.5 8.5h.01"/><path d="M12 12h.01"/><path d="M8.5 15.5h.01"/><path d="M15.5 15.5h.01"/>',
+    embutido: '<path d="M12 3.5 3 8l9 4.5L21 8z"/><path d="m3 12.5 9 4.5 9-4.5"/><path d="m3 16.5 9 4.5 9-4.5"/>',
+    fixo: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+    livre: '<path d="m22 7-8.5 8.5-5-5L2 17"/><path d="M16 7h6v6"/>',
     fidelidade: '<path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>',
-    mecanismo: '<path d="M4 17h4v3H4zM10 13h4v7h-4zM16 8h4v12h-4z"/><path d="M4 11 9 6l3 3 7-6"/><path d="M15 3h4v4"/>'
+    mecanismo: '<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M8 17v-4"/><path d="M13 17V9"/><path d="M18 17V5"/>'
   };
+  const SVG_SOL = '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.9 4.9 1.4 1.4"/><path d="m17.7 17.7 1.4 1.4"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m4.9 19.1 1.4-1.4"/><path d="m17.7 6.3 1.4-1.4"/></svg>';
+  const SVG_LUA = '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>';
+
+  // Tema claro/escuro do CRM: segue o sistema até a pessoa escolher (preferência guardada só neste navegador)
+  const CHAVE_TEMA = 'simconsorcio.tema';
+  function temaAtual() {
+    const t = document.documentElement.getAttribute('data-theme');
+    if (t === 'light' || t === 'dark') return t;
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  }
+  function definirTema(t) {
+    document.documentElement.setAttribute('data-theme', t);
+    try { localStorage.setItem(CHAVE_TEMA, t); } catch (e) { /* sem armazenamento */ }
+  }
+  try { const t = localStorage.getItem(CHAVE_TEMA); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) { /* sem armazenamento */ }
+  function seletorTema() {
+    const t = temaAtual();
+    const b = (v, ico, rot) => '<button type="button" data-tema="' + v + '" aria-pressed="' + (t === v) + '">' + ico + rot + '</button>';
+    return '<div class="tema" role="group" aria-label="Tema">' + b('light', SVG_SOL, 'Claro') + b('dark', SVG_LUA, 'Escuro') + '</div>';
+  }
   const icone = (mod) => '<svg class="icone" viewBox="0 0 24 24" aria-hidden="true">' + ICONES[mod] + '</svg>';
 
   function fmt(val, formato) {
@@ -238,6 +259,8 @@
     const pr = $('#principal');
     $('#botaoMenu').addEventListener('click', () => alternarMenu());
     pr.addEventListener('click', (ev) => {
+      const tema = ev.target.closest('[data-tema]');
+      if (tema) { definirTema(tema.dataset.tema); atualizar(); return; }
       const olho = ev.target.closest('[data-olho]');
       if (!olho) return;
       const id = olho.dataset.olho;
@@ -669,9 +692,10 @@
 
   function cabecalho(s, pdf) {
     const ident = [C.CATEGORIAS[s.plano.categoria].nome, s.plano.administradora].filter(Boolean).map(esc).join(' · ');
-    return '<header class="topo' + (pdf ? ' p-topo' : '') + '"><h1 class="titulo-proposta">Proposta de <span class="acento">Consórcio</span></h1>' +
+    return '<header class="topo' + (pdf ? ' p-topo' : '') + '"><div class="topo-texto"><h1 class="titulo-proposta">Proposta de <span class="acento">Consórcio</span></h1>' +
       '<p class="cliente">' + (s.plano.lead ? esc(s.plano.lead) : '<span class="mudo">Nome do cliente</span>') + '</p>' +
-      '<p class="sub-topo">' + ident + (pdf ? ' · Emitida em ' + new Date().toLocaleDateString('pt-BR') : '') + '</p></header>';
+      '<p class="sub-topo">' + ident + (pdf ? ' · Emitida em ' + new Date().toLocaleDateString('pt-BR') : '') + '</p></div>' +
+      (pdf ? '' : seletorTema()) + '</header>';
   }
 
   function desenhar(r) {
@@ -939,9 +963,11 @@
     try {
       const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true });
       const paginas = area.querySelectorAll('.pdf-pagina');
+      // As páginas são montadas em escala ampliada (--k no CSS) e capturadas reduzidas: mesma resolução final
+      const k = parseFloat(getComputedStyle(area).getPropertyValue('--k')) || 1;
       for (let i = 0; i < paginas.length; i++) {
         const pg = paginas[i];
-        const canvas = await window.html2canvas(pg, { scale: 2, backgroundColor: '#101010', logging: false, useCORS: true });
+        const canvas = await window.html2canvas(pg, { scale: 2 / k, backgroundColor: '#0D1B2A', logging: false, useCORS: true });
         if (i) doc.addPage();
         doc.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, 297);
         // Mantém os links (botão do WhatsApp) clicáveis no PDF
@@ -1018,6 +1044,7 @@
     return !!(nome || fone || planoCrm);
   })();
   try { if (localStorage.getItem('simconsorcio.menuOculto') === '1') document.body.classList.add('menu-oculto'); } catch (e) { /* sem armazenamento */ }
+  try { window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => atualizar()); } catch (e) { /* navegador antigo */ }
   const aplicarPlanoCrm = (avisarFalta) => {
     if (!planoCrm) return false;
     if (selecionarPlano(planoCrm)) return true;

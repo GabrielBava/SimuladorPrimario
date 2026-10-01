@@ -16,7 +16,8 @@ const semEntidade = (js) => js.replace(/<\/script/gi, '<\\/script');
 const saida = [
   titulo,
   fontes,
-  '<style>\n' + ler('css/style.css') + '\n</style>',
+  // Famels: só a instalada no computador (local); os arquivos em fonts/ não são publicados on-line
+  '<style>\n' + ler('css/tokens.css').replace(/,url\("fonts\/[^"]+"\) format\("woff2"\)/g, '') + '\n' + ler('css/style.css') + '\n</style>',
   corpo,
   '<script>window.MODO_ARTIFACT = true;</script>',
   '<script>\n' + semEntidade(ler('js/config.js')) + '\n</script>',
