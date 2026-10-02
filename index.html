@@ -3,7 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Simulador de Consórcio</title>
+  <title>[PRONTO] Simulador de Consórcio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Manrope:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="css/tokens.css">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -11,263 +15,222 @@
 
   <!-- ===================== MENU LATERAL ===================== -->
   <aside class="sidebar" id="sidebar">
-    <div class="toolbar">
-      <button type="button" data-acao="pdf" class="primario">Gerar proposta (PDF)</button>
-      <button type="button" data-acao="nova">Nova simulação</button>
-      <button type="button" data-acao="salvarPadrao">Salvar como padrão</button>
-      <button type="button" data-acao="exemplo">Carregar exemplo</button>
-      <button type="button" data-acao="exportar">Exportar JSON</button>
-      <button type="button" data-acao="importar">Importar JSON</button>
-      <button type="button" data-acao="fabrica" class="discreto">Restaurar padrão de fábrica</button>
-      <input type="file" id="arquivoImportar" accept="application/json,.json" hidden>
+    <div class="marca">
+      <img class="logo logo-escuro" data-logo="escuro" alt="Vero Consórcios">
+      <img class="logo logo-claro" data-logo="claro" alt="Vero Consórcios">
+      <span class="marca-modulo">Simulador</span>
     </div>
-    <p class="legenda-status">Status dos campos: <b class="st st-def">Definido</b> <b class="st st-cfg">Configurável</b> <b class="st st-pend">Regra a definir</b></p>
+    <div class="toolbar">
+      <button type="button" data-acao="pdf" class="primario"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7.5Z"/><path d="M14 3v5h5"/><path d="M12 11v6"/><path d="m9 14 3 3 3-3"/></svg>Gerar proposta (PDF)</button>
+      <button type="button" data-acao="nova"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>Nova proposta</button>
+      <button type="button" data-acao="salvar"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg>Salvar proposta</button>
+    </div>
 
-    <!-- 5.1 Dados do plano -->
+    <label class="f campo-cliente"><span>Nome completo <em class="req">*</em></span>
+      <input type="text" id="f-lead" data-k="plano.lead" maxlength="80" autocomplete="off"></label>
+    <label class="f campo-cliente"><span>Contato do cliente (WhatsApp) <em class="req">*</em></span>
+      <input type="tel" id="f-contato" data-k="contato.cliente" data-telefone inputmode="tel" placeholder="(11) 99999-9999" autocomplete="off"></label>
+
+    <!-- 1. Dados do plano -->
     <details class="secao" open data-secao="plano">
-      <summary>1. Dados do plano</summary>
-      <label class="f"><span>Nome do lead / identificação <em class="req">*</em></span>
-        <input type="text" data-k="plano.lead" maxlength="80" placeholder="Ex.: Maria S. — proposta 01">
-        <small><b class="st st-def">Definido</b> Aparece no PDF. Não inclua dados pessoais além do nome.</small></label>
+      <summary><svg class="icone" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7.5Z"/><path d="M14 3v5h5"/><path d="M9 13h6"/><path d="M9 17h6"/><path d="M9 9h1"/></svg>Dados do plano</summary>
+      <fieldset class="f segmentado">
+        <legend>Categoria</legend>
+        <div class="seg-opcoes">
+          <label><input type="radio" name="categoria" id="f-categoria-imovel" data-k="plano.categoria" value="imovel"><span>Imóvel</span></label>
+          <label><input type="radio" name="categoria" id="f-categoria-veiculo" data-k="plano.categoria" value="veiculo"><span>Veículo</span></label>
+        </div>
+      </fieldset>
+      <label class="f"><span>Administradora</span>
+        <select id="f-administradora" data-k="plano.administradora" class="sel-administradora"></select></label>
+      <label class="f"><span>Plano</span>
+        <select id="f-plano" data-k="plano.planoId"></select></label>
+      <small class="nota" id="nota-plano" hidden></small>
+      <label class="f"><span>Valor do crédito <em class="req">*</em></span>
+        <input type="text" id="f-credito" data-k="plano.credito" data-moeda inputmode="numeric" placeholder="R$ 0,00" autocomplete="off"></label>
       <div class="grid2">
-        <label class="f"><span>Administradora</span><input type="text" data-k="plano.administradora" maxlength="60"></label>
-        <label class="f"><span>Grupo</span><input type="text" data-k="plano.grupo" maxlength="30"></label>
+        <label class="f"><span>Prazo (meses) <em class="req">*</em></span>
+          <input type="number" id="f-prazo" data-k="plano.prazo" min="1" max="420" step="1"></label>
+        <label class="f"><span>Contemplação (mês) <em class="req">*</em></span>
+          <input type="number" id="f-mesContemplacao" data-k="plano.mesContemplacao" min="1" step="1"></label>
       </div>
-      <label class="f"><span>Valor do crédito desejado (R$) <em class="req">*</em></span>
-        <input type="number" data-k="plano.credito" min="0" step="any"></label>
       <div class="grid2">
-        <label class="f"><span>Prazo total (meses) <em class="req">*</em></span>
-          <input type="number" data-k="plano.prazo" min="1" max="420" step="1"></label>
-        <label class="f"><span>Mês inicial</span>
-          <input type="month" data-k="plano.mesInicial"></label>
+        <label class="f"><span>Taxa adm. (%) <em class="req">*</em></span>
+          <input type="number" id="f-taxaAdm" data-k="plano.taxaAdm" min="0" max="100" step="any"></label>
+        <label class="f"><span>Fundo reserva (%) <em class="req">*</em></span>
+          <input type="number" id="f-fundoReserva" data-k="plano.fundoReserva" min="0" max="100" step="any"></label>
       </div>
-      <label class="f"><span>Taxa de administração total (%) <em class="req">*</em></span>
-        <input type="number" data-k="plano.taxaAdm" min="0" max="100" step="any">
-        <small><b class="st st-def">Definido</b> Incide sobre o crédito e é diluída no prazo (fórmula da parcela).</small></label>
-      <div class="grid2">
-        <label class="f"><span>Fundo de reserva — forma</span>
-          <select data-k="plano.frTipo"><option value="pct">Percentual (%)</option><option value="valor">Valor total (R$)</option></select></label>
-        <label class="f"><span>Fundo de reserva <em class="req">*</em></span>
-          <input type="number" data-k="plano.frValor" min="0" step="any"></label>
+      <div class="linha-chk">
+        <label class="chk"><input type="checkbox" id="f-adesaoAtiva" data-k="plano.adesaoAtiva"> Adesão</label>
+        <label class="chk"><input type="checkbox" id="f-seguroAtivo" data-k="plano.seguroAtivo"> Seguro prestamista</label>
       </div>
-      <label class="f chk"><input type="checkbox" data-k="plano.seguroAtivo"> Seguro contratado</label>
-      <div data-show="plano.seguroAtivo" class="sub">
-        <label class="f"><span>Forma de cobrança do seguro</span>
-          <select data-k="plano.seguroTipo">
-            <option value="definir">Regra a definir</option>
-            <option value="pct_credito">% ao mês sobre o crédito atualizado</option>
-            <option value="fixo">Valor fixo mensal (R$)</option>
-          </select>
-          <small><b class="st st-pend">Regra a definir</b> até ser informada pela administradora.</small></label>
-        <label class="f" data-show="plano.seguroTipo!=definir"><span>Valor do seguro (% a.m. ou R$/mês)</span>
-          <input type="number" data-k="plano.seguroValor" min="0" step="any"></label>
+      <div data-show="plano.adesaoAtiva" class="sub grid2">
+        <label class="f"><span>Adesão (% crédito)</span>
+          <input type="number" id="f-adesaoPct" data-k="plano.adesaoPct" min="0" max="100" step="any"></label>
+        <label class="f"><span>Diluição (meses)</span>
+          <input type="number" id="f-adesaoMeses" data-k="plano.adesaoMeses" min="1" step="1"></label>
       </div>
-      <div class="lista">
-        <div class="lista-titulo">Outros custos <small><b class="st st-cfg">Configurável</b></small></div>
-        <div data-lista="plano.outrosCustos"></div>
-        <button type="button" class="mini" data-add="plano.outrosCustos">+ Adicionar custo</button>
+      <div data-show="plano.seguroAtivo" class="sub grid2">
+        <label class="f"><span>Seguro (% a.m.)</span>
+          <input type="number" id="f-seguroPct" data-k="plano.seguroPct" min="0" max="100" step="any"></label>
+        <small class="nota nota-lado">Padrão 0,038% sobre o crédito, somado à parcela.</small>
       </div>
-    </details>
-
-    <!-- 5.2 Modalidade de pagamento -->
-    <details class="secao" data-secao="parcela">
-      <summary>2. Modalidade de pagamento das parcelas</summary>
-      <label class="f"><span>Modalidade</span>
-        <select data-k="parcela.modalidade">
-          <option value="integral">Parcela integral</option>
-          <option value="r50">Redutor de 50%</option>
-          <option value="r25">Redutor de 25%</option>
-          <option value="outro">Redutor com outro percentual</option>
+      <label class="f"><span>Abatimento do lance</span>
+        <select id="f-abatimento" data-k="plano.abatimento">
+          <option value="parcela">Parcela</option>
+          <option value="prazo">Prazo</option>
         </select></label>
-      <div data-show="parcela.modalidade!=integral" class="sub">
-        <label class="f" data-show="parcela.modalidade=outro"><span>Percentual de redução (%)</span>
-          <input type="number" data-k="parcela.redutorOutro" min="0" max="99" step="any"></label>
-        <div class="grid2">
-          <label class="f"><span>Redutor do mês</span><input type="number" data-k="parcela.redIni" min="1" step="1"></label>
-          <label class="f"><span>até o mês (inclusive)</span><input type="number" data-k="parcela.redFim" min="1" step="1"></label>
-        </div>
-        <label class="f chk"><input type="checkbox" data-k="parcela.encerrarNaContemplacao"> Encerrar o redutor no mês da contemplação, se ocorrer antes <small><b class="st st-cfg">Configurável</b></small></label>
-        <small class="nota">A parcela volta ao valor integral no mês seguinte ao último mês com redutor.</small>
-        <label class="f"><span>Recomposição após o redutor</span>
-          <select data-k="parcela.recomposicao">
-            <option value="definir">Regra a definir</option>
-            <option value="diluir">Diluir o percentual não pago nas parcelas restantes</option>
-            <option value="manual">Informar o valor da parcela após o redutor</option>
-          </select>
-          <small><b class="st st-pend">Regra a definir</b> Sem esta regra, a projeção após o redutor não é calculada.</small></label>
-        <label class="f" data-show="parcela.recomposicao=manual"><span>Parcela após o redutor (R$, data-base, sem seguro)</span>
-          <input type="number" data-k="parcela.parcelaManual" min="0" step="any"></label>
-      </div>
-      <p class="formula">Parcela = [(Crédito ÷ Prazo) × (1 − Redutor)] + (Taxa adm. total ÷ Prazo) + (Fundo de reserva total ÷ Prazo)</p>
-    </details>
-
-    <!-- 5.3 Reajuste -->
-    <details class="secao" data-secao="reajuste">
-      <summary>3. Reajuste do crédito e das parcelas</summary>
-      <div class="bloco">
-        <label class="f"><span>Índice de reajuste do crédito</span>
-          <select data-k="reajuste.credito.indice" class="sel-indice"></select></label>
-        <label class="f" data-show="reajuste.credito.indice=outro"><span>Nome do índice</span><input type="text" data-k="reajuste.credito.nome" maxlength="30"></label>
-        <label class="f" data-show="reajuste.credito.indice=ipca|incc|inpc|outro"><span>Taxa estimada por reajuste (%)</span>
-          <input type="number" data-k="reajuste.credito.taxa" step="any">
-          <small><b class="st st-cfg">Premissa</b> Projeção estimada; não há taxa padrão.</small></label>
-      </div>
-      <div class="bloco">
-        <label class="f"><span>Índice de reajuste da parcela</span>
-          <select data-k="reajuste.parcela.indice" class="sel-indice"></select></label>
-        <label class="f" data-show="reajuste.parcela.indice=outro"><span>Nome do índice</span><input type="text" data-k="reajuste.parcela.nome" maxlength="30"></label>
-        <label class="f" data-show="reajuste.parcela.indice=ipca|incc|inpc|outro"><span>Taxa estimada por reajuste (%)</span>
-          <input type="number" data-k="reajuste.parcela.taxa" step="any">
-          <small><b class="st st-cfg">Premissa</b> Projeção estimada; não há taxa padrão.</small></label>
-      </div>
+      <small class="nota" data-show="plano.abatimento=parcela">O lance reduz o valor das parcelas restantes; o prazo se mantém.</small>
+      <small class="nota" data-show="plano.abatimento=prazo">O lance quita as últimas parcelas; o valor da parcela se mantém.</small>
       <div class="grid2">
-        <label class="f"><span>Periodicidade (meses)</span><input type="number" data-k="reajuste.periodicidade" min="1" step="1"></label>
-        <label class="f"><span>1º reajuste no mês</span><input type="number" data-k="reajuste.primeiroMes" min="1" step="1"></label>
+        <label class="f"><span>Índice de reajuste</span>
+          <select id="f-indice" data-k="plano.indice" class="sel-indice"></select></label>
+        <label class="f" data-show="plano.indice=ipca|incc|inpc|outro"><span>Taxa estimada (% a.a.)</span>
+          <input type="number" id="f-indiceTaxa" data-k="plano.indiceTaxa" step="any"></label>
       </div>
-      <small class="nota"><b class="st st-cfg">Configurável</b> Periodicidade e data-base devem ser confirmadas com a administradora.</small>
-      <p class="formula">Crédito atualizado = Crédito × (1 + taxa)<sup>nº de reajustes</sup>. Fundo comum, taxa de administração e fundo de reserva da parcela são recalculados sobre o crédito reajustado pelo índice da parcela.</p>
+      <label class="f" data-show="plano.indice=outro"><span>Nome do índice</span>
+        <input type="text" id="f-indiceNome" data-k="plano.indiceNome" maxlength="30"></label>
+      <small class="nota">Reajuste anual (meses 13, 25, 37…) sobre o crédito e as parcelas.</small>
     </details>
 
-    <!-- 5.4 Recursos para lance -->
-    <details class="secao" data-secao="recursos">
-      <summary>4. Recursos para lance</summary>
-      <div class="bloco">
-        <div class="bloco-titulo">FGTS (entra como recurso próprio)</div>
-        <label class="f"><span>FGTS disponível (R$)</span><input type="number" data-k="recursos.fgtsDisponivel" min="0" step="any"></label>
-        <label class="f chk"><input type="checkbox" data-k="recursos.fgtsPermitido"> Uso do FGTS confirmado (regra do grupo, finalidade e condições do participante)</label>
-        <label class="f"><span>FGTS a utilizar no lance (R$)</span><input type="number" data-k="recursos.fgtsUsar" min="0" step="any"></label>
-        <div class="chks"><span>Usar FGTS em:</span>
-          <label class="chk"><input type="checkbox" data-k="recursos.fgtsEmFixo"> Lance fixo</label>
-          <label class="chk"><input type="checkbox" data-k="recursos.fgtsEmLivre"> Lance livre</label></div>
-      </div>
-      <div class="bloco">
-        <div class="bloco-titulo">Lance embutido</div>
-        <div class="grid2">
-          <label class="f"><span>Forma</span><select data-k="recursos.embutidoTipo"><option value="pct">Percentual (%)</option><option value="valor">Valor (R$)</option></select></label>
-          <label class="f"><span>Embutido</span><input type="number" data-k="recursos.embutidoValor" min="0" step="any"></label>
-        </div>
-        <div class="chks"><span>Usar embutido em:</span>
-          <label class="chk"><input type="checkbox" data-k="recursos.embutidoEmFixo"> Lance fixo</label>
-          <label class="chk"><input type="checkbox" data-k="recursos.embutidoEmLivre"> Lance livre</label></div>
-        <label class="f"><span>Tratamento do embutido no crédito</span>
-          <select data-k="recursos.embutidoTratamento">
-            <option value="definir">Regra a definir</option>
-            <option value="descontar">Descontado do crédito bruto na contemplação</option>
+    <!-- 2. Modalidade Parcela -->
+    <details class="secao" open data-secao="parcela">
+      <summary><svg class="icone" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3 10h18"/><path d="M7 15h3"/></svg>Modalidade Parcela</summary>
+      <div class="grid2">
+        <label class="f"><span>Modalidade</span>
+          <select id="f-modalidade" data-k="parcela.modalidade">
+            <option value="integral">Parcela integral</option>
+            <option value="r50">Redutor de 50%</option>
+            <option value="r25">Redutor de 25%</option>
+            <option value="outro">Outro percentual</option>
           </select></label>
+        <label class="f" data-show="parcela.modalidade=outro"><span>% de redução</span>
+          <input type="number" id="f-redutorOutro" data-k="parcela.redutorOutro" min="0" max="99" step="any"></label>
+      </div>
+      <small class="nota" data-show="parcela.modalidade!=integral&plano.administradora!=HS">Redutor só no fundo comum. Vale até a contemplação; a diferença é diluída depois.</small>
+      <small class="nota" data-show="parcela.modalidade!=integral&plano.administradora=HS">HS: redutor sobre a parcela inteira (fundo comum + taxa adm. + fundo de reserva). Vale até a contemplação; a diferença é diluída depois.</small>
+    </details>
+
+    <!-- 3. Estratégias de Contemplação -->
+    <details class="secao" open data-secao="lances">
+      <summary><svg class="icone" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>Estratégia de Lance</summary>
+      <div class="bloco bloco-fgts">
+        <label class="chk chk-titulo"><input type="checkbox" id="f-fgtsAtivo" data-k="lances.fgtsAtivo"> FGTS</label>
+        <label class="f" data-show="lances.fgtsAtivo"><span>Valor do FGTS (R$)</span>
+          <input type="text" id="f-fgtsValor" data-k="lances.fgtsValor" data-moeda inputmode="numeric" placeholder="R$ 0,00" autocomplete="off"></label>
       </div>
       <div class="bloco">
-        <div class="bloco-titulo">Regras e limites do grupo</div>
-        <label class="f"><span>Base dos percentuais de lance</span>
-          <select data-k="recursos.baseCalculo">
-            <option value="definir">Regra a definir</option>
-            <option value="contratado">Crédito contratado</option>
-            <option value="atualizado">Crédito atualizado no mês da contemplação</option>
-          </select></label>
-        <div class="grid2">
-          <label class="f"><span>Limite do embutido (%)</span><input type="number" data-k="recursos.embutidoLimitePct" min="0" max="100" step="any"></label>
-          <label class="f"><span>Limite do lance total (%)</span><input type="number" data-k="recursos.lanceLimitePct" min="0" max="100" step="any"></label>
+        <label class="chk chk-titulo"><input type="checkbox" id="f-embutidoAtivo" data-k="lances.embutidoAtivo"> Lance Embutido</label>
+        <div class="grid2" data-show="lances.embutidoAtivo">
+          <label class="f"><span>% do Crédito</span><input type="number" id="f-embutidoPct" data-k="lances.embutidoPct" min="0" max="100" step="any"></label>
+          <label class="f"><span>Valor (R$)</span><output class="valor-travado" id="v-embutido" data-valor="embutido" aria-live="polite">—</output></label>
         </div>
-        <label class="f chk"><input type="checkbox" data-k="recursos.recursosAuto"> Recursos próprios = total ofertado − embutido − FGTS</label>
-        <label class="f" data-show="!recursos.recursosAuto"><span>Recursos próprios em dinheiro (R$)</span><input type="number" data-k="recursos.recursosProprios" min="0" step="any"></label>
-        <label class="f"><span>Regras ou limites específicos do grupo</span><textarea data-k="recursos.regrasGrupo" rows="2"></textarea></label>
-      </div>
-    </details>
-
-    <!-- 5.5 Estratégias de contemplação -->
-    <details class="secao" data-secao="contemplacao">
-      <summary>5. Estratégias de contemplação</summary>
-      <div class="bloco">
-        <div class="bloco-titulo">Sorteio</div>
-        <label class="f chk"><input type="checkbox" data-k="contemplacao.sorteio.disponivel"> Sorteio disponível no grupo</label>
-        <label class="f"><span>Mês hipotético de contemplação</span><input type="number" data-k="contemplacao.sorteio.mes" min="1" step="1"></label>
-        <label class="f"><span>Premissa usada para o mês</span><input type="text" data-k="contemplacao.sorteio.premissa" maxlength="160"></label>
-        <label class="f"><span>Observações sobre a regra</span><textarea data-k="contemplacao.sorteio.obs" rows="2"></textarea></label>
       </div>
       <div class="bloco">
-        <div class="bloco-titulo">Lance fixo</div>
-        <label class="f chk"><input type="checkbox" data-k="contemplacao.fixo.disponivel"> Lance fixo disponível no grupo</label>
-        <label class="f"><span>Percentual do lance fixo (regra do grupo, %)</span><input type="number" data-k="contemplacao.fixo.pct" min="0" max="100" step="any"></label>
-        <label class="f"><span>Mês em que o lance é ofertado (hipótese de contemplação)</span><input type="number" data-k="contemplacao.fixo.mes" min="1" step="1"></label>
-        <label class="f"><span>Premissa usada para o mês</span><input type="text" data-k="contemplacao.fixo.premissa" maxlength="160"></label>
-        <label class="f"><span>Observações sobre a regra</span><textarea data-k="contemplacao.fixo.obs" rows="2"></textarea></label>
-      </div>
-      <div class="bloco">
-        <div class="bloco-titulo">Lance livre</div>
-        <label class="f chk"><input type="checkbox" data-k="contemplacao.livre.disponivel"> Lance livre disponível no grupo</label>
-        <div class="grid2">
-          <label class="f"><span>Forma</span><select data-k="contemplacao.livre.tipo"><option value="pct">Percentual (%)</option><option value="valor">Valor (R$)</option></select></label>
-          <label class="f"><span>Total ofertado</span><input type="number" data-k="contemplacao.livre.valor" min="0" step="any"></label>
+        <label class="chk chk-titulo"><input type="checkbox" id="f-fixoAtivo" data-k="lances.fixoAtivo"> Lance Fixo</label>
+        <div data-show="lances.fixoAtivo">
+          <div class="grid2">
+            <label class="f"><span>% do Crédito</span><input type="number" id="f-fixoPct" data-k="lances.fixoPct" min="0" max="100" step="any"></label>
+            <label class="f"><span>Valor (R$)</span><output class="valor-travado" id="v-fixo" data-valor="fixo" aria-live="polite">—</output></label>
+          </div>
+          <div class="linha-chk">
+            <label class="chk chk-sub"><input type="checkbox" id="f-fixoUsarEmbutido" data-k="lances.fixoUsarEmbutido"> Usar Embutido</label>
+            <label class="chk chk-sub" data-show="lances.fgtsAtivo"><input type="checkbox" id="f-fixoUsarFgts" data-k="lances.fixoUsarFgts"> Usar FGTS</label>
+          </div>
         </div>
-        <label class="f"><span>Mês em que o lance é ofertado (hipótese de contemplação)</span><input type="number" data-k="contemplacao.livre.mes" min="1" step="1"></label>
-        <label class="f"><span>Premissa usada para o mês</span><input type="text" data-k="contemplacao.livre.premissa" maxlength="160"></label>
-        <label class="f"><span>Observações sobre a regra</span><textarea data-k="contemplacao.livre.obs" rows="2"></textarea></label>
       </div>
-      <label class="f"><span>Modalidade da Tabela B (cenário de lance)</span>
-        <select data-k="contemplacao.cenarioB"><option value="livre">Lance livre</option><option value="fixo">Lance fixo</option></select></label>
-      <label class="f"><span>Amortização do saldo pelo lance</span>
-        <select data-k="contemplacao.abatimento">
-          <option value="definir">Regra a definir</option>
-          <option value="nominal">Abater o valor nominal do lance das parcelas futuras (aproximação)</option>
-        </select></label>
-      <small class="nota">O mês de contemplação é sempre uma hipótese informada pelo consultor. O simulador não calcula o mês a partir do valor do lance.</small>
-    </details>
-
-    <!-- 5.6 Venda -->
-    <details class="secao" data-secao="venda">
-      <summary>6. Premissas de venda da carta contemplada</summary>
-      <label class="f chk"><input type="checkbox" data-k="venda.ativa"> Simular venda da carta contemplada</label>
-      <div data-show="venda.ativa" class="sub">
-        <label class="f"><span>Base do valor de venda</span>
-          <select data-k="venda.base">
-            <option value="pct_liquido">% sobre o crédito líquido disponível</option>
-            <option value="pct_bruto">% sobre o crédito bruto na contemplação</option>
-            <option value="valor">Valor estimado de venda (R$)</option>
-          </select></label>
-        <label class="f" data-show="venda.base!=valor"><span>Percentual estimado de venda (%)</span><input type="number" data-k="venda.pct" min="0" step="any"></label>
-        <label class="f" data-show="venda.base=valor"><span>Valor estimado de venda (R$)</span><input type="number" data-k="venda.valor" min="0" step="any"></label>
-        <div class="grid2">
-          <label class="f"><span>Comissões/taxas (% da venda)</span><input type="number" data-k="venda.comissaoPct" min="0" max="100" step="any"></label>
-          <label class="f"><span>Custos fixos da venda (R$)</span><input type="number" data-k="venda.custosFixos" min="0" step="any"></label>
+      <div class="bloco">
+        <label class="chk chk-titulo"><input type="checkbox" id="f-livreAtivo" data-k="lances.livreAtivo"> Lance Livre</label>
+        <div data-show="lances.livreAtivo">
+          <div class="grid2">
+            <label class="f"><span>% do Crédito</span><input type="number" id="f-livrePct" data-k="lances.livrePct" min="0" max="100" step="any"></label>
+            <label class="f"><span>Valor (R$)</span><output class="valor-travado" id="v-livre" data-valor="livre" aria-live="polite">—</output></label>
+          </div>
+          <div class="linha-chk">
+            <label class="chk chk-sub"><input type="checkbox" id="f-livreUsarEmbutido" data-k="lances.livreUsarEmbutido"> Usar Embutido</label>
+            <label class="chk chk-sub" data-show="lances.fgtsAtivo"><input type="checkbox" id="f-livreUsarFgts" data-k="lances.livreUsarFgts"> Usar FGTS</label>
+          </div>
         </div>
-        <p class="formula">Valor líquido = Valor de venda − (Comissões % × Valor de venda) − Custos fixos</p>
-        <label class="f"><span>Observações sobre a premissa de venda</span><textarea data-k="venda.obs" rows="2"></textarea></label>
       </div>
     </details>
 
-    <!-- 9.1 Resultado -->
-    <details class="secao" data-secao="resultado">
-      <summary>7. Fórmula do resultado financeiro</summary>
-      <p class="formula">Resultado estimado = + valor líquido da venda − componentes marcados ± fluxos cadastrados</p>
-      <label class="f chk"><input type="checkbox" data-k="resultado.incluirParcelas"> Deduzir parcelas pagas até a contemplação</label>
-      <label class="f chk"><input type="checkbox" data-k="resultado.incluirSeguro"> Deduzir seguro pago até a contemplação</label>
-      <label class="f chk"><input type="checkbox" data-k="resultado.incluirOutros"> Deduzir outros custos pagos</label>
-      <label class="f chk"><input type="checkbox" data-k="resultado.incluirProprios"> Deduzir recursos próprios usados no lance</label>
-      <label class="f"><span>Tratamento do FGTS no resultado</span>
-        <select data-k="resultado.fgtsTratamento">
-          <option value="deduzir">Deduzir (patrimônio do participante)</option>
-          <option value="informativo">Apenas informativo (não deduzir)</option>
-        </select></label>
-      <div class="lista">
-        <div class="lista-titulo">Outros fluxos financeiros (+ entrada / − saída)</div>
-        <div data-lista="resultado.fluxos"></div>
-        <button type="button" class="mini" data-add="resultado.fluxos">+ Adicionar fluxo</button>
+    <!-- 4. Lance Fidelidade (opcional) -->
+    <details class="secao" open data-secao="fidelidade">
+      <summary><svg class="icone" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>Lance Fidelidade</summary>
+      <label class="chk chk-titulo linha-habilitar"><input type="checkbox" id="f-fidelidadeAtivo" data-k="fidelidade.ativo"> Habilitar Lance Fidelidade</label>
+      <div data-show="fidelidade.ativo">
+      <div class="bloco">
+        <div class="titulo-fid">Lance Fidelidade 1</div>
+        <div class="grid2">
+          <label class="f"><span>A partir da Parcela</span><input type="number" id="f-fid1Parcela" data-k="fidelidade.p1Parcela" min="1" step="1"></label>
+          <label class="f"><span>% Embutido</span><input type="number" id="f-fid1Pct" data-k="fidelidade.p1Pct" min="0" max="100" step="any"></label>
+        </div>
+        <label class="f"><span>Valor (R$)</span><output class="valor-travado" id="v-fid1" data-valor="fid1" aria-live="polite">—</output></label>
       </div>
-      <small class="nota">O lance embutido nunca é deduzido como aporte: ele sai do crédito, não do participante.</small>
+      <div class="bloco">
+        <div class="titulo-fid">Lance Fidelidade 2</div>
+        <div class="grid2">
+          <label class="f"><span>A partir da Parcela</span><input type="number" id="f-fid2Parcela" data-k="fidelidade.p2Parcela" min="1" step="1"></label>
+          <label class="f"><span>% Embutido</span><input type="number" id="f-fid2Pct" data-k="fidelidade.p2Pct" min="0" max="100" step="any"></label>
+        </div>
+        <label class="f"><span>Valor (R$)</span><output class="valor-travado" id="v-fid2" data-valor="fid2" aria-live="polite">—</output></label>
+      </div>
+      <div class="bloco">
+        <div class="titulo-fid">Lance Fidelidade 3</div>
+        <div class="grid2">
+          <label class="f"><span>A partir da Parcela</span><input type="number" id="f-fid3Parcela" data-k="fidelidade.p3Parcela" min="1" step="1"></label>
+          <label class="f"><span>% Embutido</span><input type="number" id="f-fid3Pct" data-k="fidelidade.p3Pct" min="0" max="100" step="any"></label>
+        </div>
+        <label class="f"><span>Valor (R$)</span><output class="valor-travado" id="v-fid3" data-valor="fid3" aria-live="polite">—</output></label>
+      </div>
+      </div>
     </details>
 
-    <!-- Horizonte -->
-    <details class="secao" data-secao="horizonte">
-      <summary>8. Horizonte da projeção</summary>
-      <label class="f"><span>Projetar total pago</span>
-        <select data-k="horizonte.tipo">
-          <option value="prazo">Prazo total do plano</option>
-          <option value="mes">Até determinado mês</option>
-          <option value="sorteio">Até o mês de contemplação (sorteio)</option>
-          <option value="lance">Até o mês de contemplação (lance)</option>
-        </select></label>
-      <label class="f" data-show="horizonte.tipo=mes"><span>Mês final</span><input type="number" data-k="horizonte.mes" min="1" step="1"></label>
+    <!-- 5. Mecanismo de Alavancagem (opcional) -->
+    <details class="secao" open data-secao="mecanismo">
+      <summary><svg class="icone" viewBox="0 0 24 24" aria-hidden="true"><path d="m22 7-8.5 8.5-5-5L2 17"/><path d="M16 7h6v6"/></svg>Mecanismo de Alavancagem</summary>
+      <label class="chk chk-titulo linha-habilitar"><input type="checkbox" id="f-mecanismoAtivo" data-k="mecanismo.ativo"> Habilitar Mecanismo de Alavancagem</label>
+      <div data-show="mecanismo.ativo">
+        <div class="grid2">
+          <label class="f"><span>Reaplicar</span>
+            <select id="f-mecBase" data-k="mecanismo.base">
+              <option value="venda">Valor de venda</option>
+              <option value="lucro">Lucro</option>
+            </select></label>
+          <label class="f"><span>Carta de origem</span>
+            <select id="f-mecOrigem" data-k="mecanismo.origem">
+              <option value="sorteio">Sorteio</option>
+              <option value="embutido">Lance Embutido</option>
+            </select></label>
+        </div>
+        <label class="f"><span>Capital para reaplicar (R$)</span><output class="valor-travado" id="v-mecCapital" data-valor="mecCapital" aria-live="polite">—</output></label>
+        <small class="nota">No mês da projeção de contemplação dos dados do plano. As novas cartas seguem as mesmas características do plano.</small>
+        <div class="titulo-fid">Quantidade de cartas por cenário</div>
+        <div class="grid2">
+          <label class="f"><span>Cenário 1</span><input type="number" id="f-mecQ1" data-k="mecanismo.q1" min="1" step="1" placeholder="—"></label>
+          <label class="f"><span>Cenário 2</span><input type="number" id="f-mecQ2" data-k="mecanismo.q2" min="1" step="1" placeholder="—"></label>
+          <label class="f"><span>Cenário 3</span><input type="number" id="f-mecQ3" data-k="mecanismo.q3" min="1" step="1" placeholder="—"></label>
+          <label class="f"><span>Cenário 4</span><input type="number" id="f-mecQ4" data-k="mecanismo.q4" min="1" step="1" placeholder="—"></label>
+        </div>
+        <label class="f"><span>Contemplação das novas cartas (mês)</span><input type="number" id="f-mecMes" data-k="mecanismo.mesNovas" min="1" step="1"></label>
+      </div>
+    </details>
+
+    <!-- 6. Projeções -->
+    <details class="secao" open data-secao="projecoes">
+      <summary><svg class="icone" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>Projeções</summary>
+      <p class="nota">Gráficos exibidos na tela e no PDF.</p>
+      <div class="linha-chk">
+        <label class="chk"><input type="checkbox" id="f-projParcelas" data-k="projecoes.parcelas"> Parcelas</label>
+        <label class="chk"><input type="checkbox" id="f-projCredito" data-k="projecoes.credito"> Crédito</label>
+        <label class="chk"><input type="checkbox" id="f-projRentabilidade" data-k="projecoes.rentabilidade"> Rentabilidade</label>
+      </div>
     </details>
   </aside>
+
+  <button type="button" class="botao-menu" id="botaoMenu" aria-controls="sidebar" aria-label="Ocultar menu" title="Ocultar menu">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M9.5 4.5v15"/><path class="seta" d="m15.5 10-2 2 2 2"/></svg>
+  </button>
 
   <!-- ===================== RESULTADOS ===================== -->
   <main class="principal" id="principal" aria-live="polite"></main>
@@ -276,6 +239,8 @@
 <!-- Proposta para impressão / PDF (preenchida ao gerar) -->
 <div id="proposta" class="proposta"></div>
 
+<script src="js/config.js"></script>
+<script src="js/logos.js"></script>
 <script src="js/calc.js"></script>
 <script src="js/app.js"></script>
 </body>

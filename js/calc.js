@@ -5,12 +5,12 @@
  * navegador (window.Calc) e no Node.js (require('./calc')) para testes.
  *
  * Convenções:
- * - Todo valor apresentado é um objeto "Valor": { v, tipo, formula, origem, nota, pend }
+ * - Valores apresentados são objetos "Valor": { v, tipo, formula, origem, nota, pend }
  *     tipo: 'informado' | 'calculado' | 'estimado' | 'pendente' | 'na'
  *     v === null significa "Não calculado" e pend lista os motivos.
- * - Meses são numerados de 1 até o prazo (mês 1 = mês inicial da simulação).
- * - Nenhuma regra de administradora/grupo é presumida: quando não informada,
- *   o valor dependente fica pendente ("Regra a definir").
+ * - Meses são numerados de 1 até o prazo.
+ * - O núcleo numérico (nucleo) não formata textos, para poder ser chamado
+ *   muitas vezes (gráfico de rentabilidade por mês de contemplação).
  */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
@@ -19,19 +19,93 @@
   'use strict';
 
   // ---------------------------------------------------------------------------
-  // Catálogos
+  // Catálogos e regras fixas
   // ---------------------------------------------------------------------------
 
   const INDICES = {
-    definir: { nome: 'Regra a definir' },
     pre5: { nome: 'Pré-fixado (5%)', taxaFixa: 5 },
     pre6: { nome: 'Pré-fixado (6%)', taxaFixa: 6 },
     ipca: { nome: 'IPCA' },
     incc: { nome: 'INCC' },
     inpc: { nome: 'INPC' },
-    outro: { nome: 'Outro índice' },
-    sem: { nome: 'Sem reajuste (valores nominais)', taxaFixa: 0 }
+    outro: { nome: 'Outro índice' }
   };
+
+  // Ao selecionar a categoria, estes valores são aplicados ao plano (e podem ser editados depois).
+  const CATEGORIAS = {
+    imovel: { nome: 'Imóvel', indice: 'incc', credito: 200000, prazo: 240, taxaAdm: 20, fundoReserva: 2 },
+    veiculo: { nome: 'Veículo', indice: 'ipca', credito: 80000, prazo: 100, taxaAdm: 13, fundoReserva: 2 }
+  };
+
+  /** Aplica ao plano os valores fixos da categoria. */
+  function aplicarCategoria(plano, categoria) {
+    const c = CATEGORIAS[categoria];
+    if (!c) return plano;
+    Object.assign(plano, { categoria, indice: c.indice, credito: c.credito, prazo: c.prazo, taxaAdm: c.taxaAdm, fundoReserva: c.fundoReserva });
+    return plano;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Planos cadastrados (CRM): cada plano traz administradora, crédito mínimo, prazo,
+  // taxas, percentuais de lance e índice. Aceita nomes de campos usuais do CRM.
+  // ---------------------------------------------------------------------------
+
+  function normalizarIndice(v) {
+    const t = String(v == null ? '' : v).trim().toLowerCase();
+    if (!t) return null;
+    if (INDICES[t]) return t;
+    for (const k of ['incc', 'ipca', 'inpc']) if (t.includes(k)) return k;
+    if (/pr[eé]/.test(t) && /6/.test(t)) return 'pre6';
+    if (/pr[eé]/.test(t)) return 'pre5';
+    return 'outro';
+  }
+
+  function normalizarPlano(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const pega = (...ks) => { for (const k of ks) if (raw[k] !== undefined && raw[k] !== null && raw[k] !== '') return raw[k]; return null; };
+    const n = (...ks) => num(pega(...ks));
+    const id = pega('id', 'codigo', 'planoId');
+    const administradora = pega('administradora', 'adm');
+    if (id === null || !administradora) return null;
+    const cat = String(pega('categoria', 'tipo') || '').toLowerCase();
+    return {
+      id: String(id),
+      nome: String(pega('nome', 'descricao', 'plano') || 'Plano ' + id),
+      administradora: String(administradora).trim(),
+      categoria: /ve[ií]c|auto|moto/.test(cat) ? 'veiculo' : /im[oó]v/.test(cat) ? 'imovel' : null,
+      creditoMinimo: n('creditoMinimo', 'credito_minimo', 'credito'),
+      prazo: n('prazo', 'prazoGrupo', 'prazo_grupo'),
+      taxaAdm: n('taxaAdm', 'taxaAdministrativa', 'taxa_adm', 'taxaAdministracao'),
+      fundoReserva: n('fundoReserva', 'fundo_reserva'),
+      embutidoPct: n('embutidoPct', 'lanceEmbutido', 'lance_embutido'),
+      fixoPct: n('fixoPct', 'lanceFixo', 'lance_fixo'),
+      indice: normalizarIndice(pega('indice', 'indiceReajuste', 'indice_reajuste')),
+      indiceTaxa: n('indiceTaxa', 'taxaIndice', 'taxa_indice'),
+      exemplo: !!raw.exemplo
+    };
+  }
+
+  /** Aplica o plano cadastrado ao estado: dados do plano, percentuais de lance e índice. */
+  function aplicarPlanoCadastrado(s, pl) {
+    const p = s.plano;
+    p.planoId = pl.id;
+    p.administradora = pl.administradora;
+    if (pl.categoria) p.categoria = pl.categoria;
+    if (isNum(pl.prazo)) p.prazo = pl.prazo;
+    if (isNum(pl.taxaAdm)) p.taxaAdm = pl.taxaAdm;
+    if (isNum(pl.fundoReserva)) p.fundoReserva = pl.fundoReserva;
+    if (pl.indice) p.indice = pl.indice;
+    if (isNum(pl.indiceTaxa)) p.indiceTaxa = pl.indiceTaxa;
+    p.creditoMinimo = isNum(pl.creditoMinimo) ? pl.creditoMinimo : null;
+    // Crédito: parte do crédito mínimo do plano (pode ser aumentado depois)
+    if (isNum(pl.creditoMinimo)) p.credito = pl.creditoMinimo;
+    if (isNum(num(p.prazo)) && isNum(num(p.mesContemplacao)) && num(p.mesContemplacao) > num(p.prazo)) p.mesContemplacao = num(p.prazo);
+    if (isNum(pl.embutidoPct)) s.lances.embutidoPct = pl.embutidoPct;
+    if (isNum(pl.fixoPct)) s.lances.fixoPct = pl.fixoPct;
+    return s;
+  }
+
+  const ADMINISTRADORAS = ['HS', 'Embracon', 'CNP', 'Itaú', 'Porto Seguro', 'Servopa', 'Banco do Brasil', 'Santander', 'Klubi'];
 
   const MODALIDADES_PARCELA = {
     integral: { nome: 'Parcela integral', pct: 0 },
@@ -40,95 +114,69 @@
     outro: { nome: 'Redutor com outro percentual', pct: null }
   };
 
+  const REGRAS = {
+    periodicidadeReajuste: 12, // reajuste a cada 12 meses (mês 13, 25, ...) até o fim do plano
+    vendaPct: 20, // venda da carta contemplada: 20% sobre o crédito líquido disponível
+    locacaoPct: 1.6, // retorno mensal de locação: 1,6% ao mês sobre o crédito disponível
+    seguroPctPadrao: 0.038, // seguro prestamista: % ao mês sobre o crédito atualizado
+    embutidoPctPadrao: 25,
+    fixoPctPadrao: 50
+  };
+
   const MSG = {
-    pendRegra: 'Não calculado: depende de regra a definir',
     estimado: 'Resultado estimado: depende das premissas informadas.',
-    mesHipotetico: 'Mês de contemplação hipotético, sem garantia de ocorrência.',
-    taxaEstimada: 'A projeção usa uma taxa estimada para o índice selecionado.',
-    embutidoSemRegra: 'Não foi possível calcular o crédito líquido sem a regra do lance embutido.',
-    recomposicao: 'Regra a definir: informe como o redutor é recomposto.'
+    mesHipotetico: 'Mês de contemplação projetado, sem garantia de ocorrência.',
+    taxaEstimada: 'A projeção usa uma taxa estimada para o índice selecionado.'
   };
 
   // ---------------------------------------------------------------------------
-  // Estado padrão (configuração de fábrica). Campos sem regra informada
-  // começam vazios ou como 'definir'.
+  // Estado padrão
   // ---------------------------------------------------------------------------
 
   function estadoPadrao() {
     return {
       plano: {
         lead: '',
+        categoria: 'imovel',
         administradora: '',
-        grupo: '',
-        credito: null,
-        prazo: null,
-        mesInicial: '',
-        taxaAdm: null,
-        frTipo: 'pct', // 'pct' | 'valor'
-        frValor: null,
+        planoId: '', // plano cadastrado (CRM) aplicado aos campos
+        creditoMinimo: null, // crédito mínimo do plano cadastrado
+        credito: CATEGORIAS.imovel.credito,
+        prazo: CATEGORIAS.imovel.prazo,
+        mesContemplacao: 12,
+        taxaAdm: CATEGORIAS.imovel.taxaAdm,
+        fundoReserva: CATEGORIAS.imovel.fundoReserva,
+        adesaoAtiva: false,
+        adesaoPct: null,
+        adesaoMeses: null,
         seguroAtivo: false,
-        seguroTipo: 'definir', // 'definir' | 'pct_credito' | 'fixo'
-        seguroValor: null,
-        outrosCustos: [] // { desc, tipo: 'definir'|'unico'|'mensal', valor, mes }
+        seguroPct: REGRAS.seguroPctPadrao,
+        abatimento: 'parcela', // 'parcela' | 'prazo'
+        indice: CATEGORIAS.imovel.indice,
+        indiceTaxa: null,
+        indiceNome: ''
       },
-      parcela: {
-        modalidade: 'integral',
-        redutorOutro: null,
-        redIni: 1,
-        redFim: null,
-        encerrarNaContemplacao: false,
-        recomposicao: 'definir', // 'definir' | 'diluir' | 'manual'
-        parcelaManual: null
+      parcela: { modalidade: 'integral', redutorOutro: null },
+      lances: {
+        fgtsAtivo: false,
+        fgtsValor: null,
+        embutidoAtivo: true,
+        embutidoPct: REGRAS.embutidoPctPadrao,
+        fixoAtivo: true,
+        fixoPct: REGRAS.fixoPctPadrao,
+        fixoUsarEmbutido: true,
+        fixoUsarFgts: false,
+        livreAtivo: false,
+        livrePct: null,
+        livreUsarEmbutido: false,
+        livreUsarFgts: false
       },
-      reajuste: {
-        credito: { indice: 'definir', taxa: null, nome: '' },
-        parcela: { indice: 'definir', taxa: null, nome: '' },
-        periodicidade: 12,
-        primeiroMes: 13
-      },
-      recursos: {
-        fgtsDisponivel: null,
-        fgtsPermitido: false,
-        fgtsUsar: null,
-        fgtsEmFixo: false,
-        fgtsEmLivre: false,
-        embutidoTipo: 'pct', // 'pct' | 'valor'
-        embutidoValor: null,
-        embutidoEmFixo: false,
-        embutidoEmLivre: false,
-        embutidoLimitePct: null,
-        lanceLimitePct: null,
-        baseCalculo: 'definir', // 'definir' | 'contratado' | 'atualizado'
-        embutidoTratamento: 'definir', // 'definir' | 'descontar'
-        recursosAuto: true,
-        recursosProprios: null,
-        regrasGrupo: ''
-      },
-      contemplacao: {
-        sorteio: { disponivel: true, mes: null, premissa: '', obs: '' },
-        fixo: { disponivel: false, pct: null, mes: null, premissa: '', obs: '' },
-        livre: { disponivel: true, tipo: 'pct', valor: null, mes: null, premissa: '', obs: '' },
-        cenarioB: 'livre', // 'livre' | 'fixo'
-        abatimento: 'definir' // 'definir' | 'nominal'
-      },
-      venda: {
-        ativa: false,
-        base: 'pct_liquido', // 'pct_liquido' | 'pct_bruto' | 'valor'
-        pct: null,
-        valor: null,
-        comissaoPct: null,
-        custosFixos: null,
-        obs: ''
-      },
-      resultado: {
-        incluirParcelas: true,
-        incluirSeguro: true,
-        incluirOutros: true,
-        incluirProprios: true,
-        fgtsTratamento: 'deduzir', // 'deduzir' | 'informativo'
-        fluxos: [] // { desc, valor } (positivo = entrada, negativo = saída)
-      },
-      horizonte: { tipo: 'prazo', mes: null } // 'prazo' | 'mes' | 'sorteio' | 'lance'
+      projecoes: { parcelas: false, credito: false, rentabilidade: false },
+      // Lance Fidelidade: desabilitado ao iniciar; cada opção tem parcela inicial e % de embutido
+      fidelidade: { ativo: false, p1Parcela: 6, p1Pct: 30, p2Parcela: 12, p2Pct: 27, p3Parcela: 18, p3Pct: 25 },
+      // Mecanismo de Alavancagem: reaplica a venda (ou o lucro) da carta em novas cartas do mesmo plano
+      mecanismo: { ativo: false, base: 'venda', origem: 'sorteio', q1: 1, q2: 2, q3: null, q4: null, mesNovas: 12 },
+      contato: { cliente: '' } // WhatsApp do cliente que recebe a proposta
     };
   }
 
@@ -138,16 +186,15 @@
 
   const num = (x) => (x === null || x === undefined || x === '' || Number.isNaN(Number(x)) ? null : Number(x));
   const isNum = (x) => typeof x === 'number' && Number.isFinite(x);
-  const r2 = (x) => (isNum(x) ? Math.round(x * 100) / 100 : x);
 
   function V(v, tipo, formula, origem, extra) {
-    const o = { v: isNum(v) || typeof v === 'string' ? v : v === 0 ? 0 : null, tipo, formula: formula || '', origem: origem || '', nota: '', pend: [] };
+    const o = { v: isNum(v) || typeof v === 'string' ? v : null, tipo, formula: formula || '', origem: origem || '', nota: '', pend: [] };
     if (o.v === null && tipo !== 'na') o.tipo = 'pendente';
     return Object.assign(o, extra || {});
   }
-  function P(motivos, formula, origem) {
-    const lista = Array.isArray(motivos) ? motivos : [motivos];
-    return { v: null, tipo: 'pendente', formula: formula || '', origem: origem || '', nota: '', pend: lista.filter(Boolean) };
+  function P(motivos, formula) {
+    const lista = (Array.isArray(motivos) ? motivos : [motivos]).filter(Boolean);
+    return { v: null, tipo: 'pendente', formula: formula || '', origem: '', nota: '', pend: Array.from(new Set(lista)) };
   }
 
   const fmtBRL = (x) =>
@@ -155,466 +202,302 @@
   const fmtPct = (x, d) => (isNum(x) ? x.toLocaleString('pt-BR', { minimumFractionDigits: d == null ? 2 : d, maximumFractionDigits: d == null ? 4 : d }) + '%' : '—');
   const fmtNum = (x, d) => (isNum(x) ? x.toLocaleString('pt-BR', { minimumFractionDigits: d || 0, maximumFractionDigits: d == null ? 6 : d }) : '—');
 
-  const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
-  function rotuloMes(mesInicial, m) {
-    if (!/^\d{4}-\d{2}$/.test(mesInicial || '')) return 'Mês ' + m;
-    const [a, mm] = mesInicial.split('-').map(Number);
-    const idx = mm - 1 + (m - 1);
-    const ano = a + Math.floor(idx / 12);
-    return 'Mês ' + m + ' (' + MESES[idx % 12] + '/' + ano + ')';
-  }
-
   // ---------------------------------------------------------------------------
-  // Reajuste
+  // Regras de reajuste e redutor
   // ---------------------------------------------------------------------------
 
-  function taxaIndice(cfg) {
-    const def = INDICES[cfg.indice] || INDICES.definir;
-    if (cfg.indice === 'definir') return null;
+  function taxaIndice(p) {
+    const def = INDICES[p.indice];
+    if (!def) return null;
     if (isNum(def.taxaFixa)) return def.taxaFixa;
-    return num(cfg.taxa);
+    return num(p.indiceTaxa);
   }
 
-  function nomeIndice(cfg) {
-    if (cfg.indice === 'outro') return 'Outro índice' + (cfg.nome ? ' (' + cfg.nome + ')' : '');
-    return (INDICES[cfg.indice] || INDICES.definir).nome;
+  function nomeIndice(p) {
+    if (p.indice === 'outro') return 'Outro índice' + (p.indiceNome ? ' (' + p.indiceNome + ')' : '');
+    return (INDICES[p.indice] || { nome: 'Não selecionado' }).nome;
   }
 
-  /** Quantidade de reajustes aplicados até o mês m (inclusive). */
-  function qtdReajustes(m, periodicidade, primeiroMes) {
-    const per = num(periodicidade);
-    const pri = num(primeiroMes);
-    if (!isNum(per) || per < 1 || !isNum(pri) || pri < 1) return null;
-    return m >= pri ? Math.floor((m - pri) / per) + 1 : 0;
-  }
+  const indiceEstimado = (p) => ['ipca', 'incc', 'inpc', 'outro'].includes(p.indice);
 
-  /** Fator acumulado de reajuste no mês m. null = não calculável. */
-  function fatorReajuste(cfg, reaj, m) {
-    const k = qtdReajustes(m, reaj.periodicidade, reaj.primeiroMes);
-    if (k === null) return null;
+  /** Reajustes aplicados até o mês m: um a cada 12 meses (mês 13 = 1º reajuste). */
+  const qtdReajustes = (m) => Math.floor((m - 1) / REGRAS.periodicidadeReajuste);
+
+  /** Fator de reajuste no mês m (null quando a taxa do índice não foi informada). */
+  function fator(p, m) {
+    const k = qtdReajustes(m);
     if (k === 0) return 1;
-    const t = taxaIndice(cfg);
-    if (!isNum(t)) return null;
-    return Math.pow(1 + t / 100, k);
+    const t = taxaIndice(p);
+    return isNum(t) ? Math.pow(1 + t / 100, k) : null;
   }
 
-  function motivoIndice(cfg, rotulo) {
-    if (cfg.indice === 'definir') return 'Índice de reajuste ' + rotulo + ': regra a definir';
-    return 'Índice de reajuste ' + rotulo + ' (' + nomeIndice(cfg) + ') sem taxa projetada informada';
+  function redutorPct(pr) {
+    const mod = MODALIDADES_PARCELA[pr.modalidade] || MODALIDADES_PARCELA.integral;
+    return mod.pct === null ? num(pr.redutorOutro) : mod.pct;
+  }
+
+  function motivoIndice(p) {
+    return 'Índice de reajuste ' + nomeIndice(p) + ' sem taxa estimada informada (necessária a partir do mês 13)';
   }
 
   // ---------------------------------------------------------------------------
-  // Parcela
+  // Dados básicos
   // ---------------------------------------------------------------------------
 
-  function redutorPct(p) {
-    const mod = MODALIDADES_PARCELA[p.modalidade] || MODALIDADES_PARCELA.integral;
-    return mod.pct === null ? num(p.redutorOutro) : mod.pct;
+  /** HS aplica o redutor sobre a parcela inteira (FC + taxa adm. + fundo de reserva); as demais, só no fundo comum. */
+  function redutorNaParcelaToda(p) {
+    return String(p.administradora || '').trim().toUpperCase() === 'HS';
   }
 
-  /** Componentes de taxa e fundo de reserva sobre um crédito de referência. */
-  function componentesTaxas(s, crefP, fp) {
-    const N = num(s.plano.prazo);
-    const ta = num(s.plano.taxaAdm);
-    const fr = num(s.plano.frValor);
-    const taxa = isNum(ta) && isNum(crefP) ? (ta / 100) * crefP / N : null;
-    let fundo = null;
-    if (isNum(fr)) {
-      if (s.plano.frTipo === 'valor') fundo = isNum(fp) ? (fr * fp) / N : null;
-      else fundo = isNum(crefP) ? ((fr / 100) * crefP) / N : null;
-    }
-    return { taxa, fundo };
+  function basicos(s) {
+    const p = s.plano;
+    const C = num(p.credito), N = num(p.prazo), ta = num(p.taxaAdm), fr = num(p.fundoReserva);
+    const pend = [];
+    if (!isNum(C) || C <= 0) pend.push('Valor do crédito não informado');
+    if (!isNum(N) || N < 1 || !Number.isInteger(N)) pend.push('Prazo inválido');
+    if (!isNum(ta)) pend.push('Taxa de administração não informada');
+    if (!isNum(fr)) pend.push('Fundo de reserva não informado');
+    const r = redutorPct(s.parcela);
+    if (!isNum(r) || r < 0 || r >= 100) pend.push('Percentual do redutor inválido');
+    return { ok: pend.length === 0, pend, C, N, ta, fr, r: isNum(r) ? r : 0 };
   }
 
   /**
-   * Parcela pela regra informada:
-   * Parcela = [(Crédito ÷ Prazo) × (1 − Redutor)] + (Taxa adm. total ÷ Prazo) + (Fundo de reserva total ÷ Prazo)
+   * Valores do lance de uma modalidade sobre uma base de crédito.
+   * 'embutido': o lance é composto só pelo lance embutido (sem recursos próprios).
+   * 'fixo' | 'livre': percentual da modalidade; com "Usar embutido", o embutido é descontado do total.
    */
-  function parcelaFormula(s, redutor) {
-    const C = num(s.plano.credito);
-    const N = num(s.plano.prazo);
-    if (!isNum(C) || !isNum(N) || N <= 0) return null;
-    const { taxa, fundo } = componentesTaxas(s, C, 1);
-    if (!isNum(taxa) || !isNum(fundo) || !isNum(redutor)) return null;
-    return (C / N) * (1 - redutor / 100) + taxa + fundo;
-  }
-
-  // ---------------------------------------------------------------------------
-  // Cronograma mensal (demonstrativo)
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Monta o demonstrativo mês a mês.
-   * @param {object} s estado
-   * @param {number|null} mesC mês de contemplação do cenário (afeta o fim do redutor quando configurado)
-   */
-  function cronograma(s, mesC) {
-    const C = num(s.plano.credito);
-    const N = num(s.plano.prazo);
-    if (!isNum(C) || !isNum(N) || N < 1 || C <= 0) return { linhas: [], fimRed: null, nRed: 0, nRest: 0 };
-    const pr = s.parcela;
-    const r = redutorPct(pr);
-    const temRed = pr.modalidade !== 'integral';
-    const redIni = num(pr.redIni) || 1;
-    let fimRed = temRed ? num(pr.redFim) : null;
-    if (temRed && pr.encerrarNaContemplacao && isNum(mesC)) fimRed = isNum(fimRed) ? Math.min(fimRed, mesC) : mesC;
-    const nRed = temRed && isNum(fimRed) ? Math.max(0, Math.min(fimRed, N) - redIni + 1) : 0;
-    const nRest = temRed && isNum(fimRed) ? Math.max(0, N - Math.min(fimRed, N)) : 0;
-
-    const linhas = [];
-    for (let m = 1; m <= N; m++) {
-      const pend = [];
-      const fp = fatorReajuste(s.reajuste.parcela, s.reajuste, m);
-      const fc = fatorReajuste(s.reajuste.credito, s.reajuste, m);
-      if (fp === null) pend.push(motivoIndice(s.reajuste.parcela, 'da parcela'));
-      const credAtual = isNum(fc) ? C * fc : null;
-      const crefP = isNum(fp) ? C * fp : null;
-
-      let reduzido = false;
-      let posRed = false;
-      let fundoComum = null;
-      let manual = null;
-      if (!temRed) {
-        fundoComum = isNum(crefP) ? crefP / N : null;
-      } else if (!isNum(r) || r < 0 || r >= 100) {
-        pend.push('Percentual do redutor não informado ou inválido');
-      } else if (m < redIni) {
-        fundoComum = isNum(crefP) ? crefP / N : null;
-      } else if (!isNum(fimRed)) {
-        pend.push('Período do redutor não informado');
-      } else if (m <= fimRed) {
-        reduzido = true;
-        fundoComum = isNum(crefP) ? (crefP / N) * (1 - r / 100) : null;
-      } else {
-        posRed = true;
-        if (pr.recomposicao === 'diluir') {
-          fundoComum = isNum(crefP) && nRest > 0 ? crefP * (1 / N + (r / 100) * nRed / (N * nRest)) : null;
-        } else if (pr.recomposicao === 'manual') {
-          const pm = num(pr.parcelaManual);
-          if (!isNum(pm)) pend.push('Valor da parcela após o redutor não informado');
-          else manual = isNum(fp) ? pm * fp : null;
-        } else {
-          pend.push(MSG.recomposicao);
-        }
-      }
-
-      const { taxa, fundo } = componentesTaxas(s, crefP, fp);
-      if (!isNum(num(s.plano.taxaAdm))) pend.push('Taxa de administração não informada');
-      if (!isNum(num(s.plano.frValor))) pend.push('Fundo de reserva não informado');
-
-      let parcela = null;
-      if (manual !== null) {
-        parcela = manual;
-        fundoComum = isNum(taxa) && isNum(fundo) ? manual - taxa - fundo : null;
-      } else if (isNum(fundoComum) && isNum(taxa) && isNum(fundo)) {
-        parcela = fundoComum + taxa + fundo;
-      }
-
-      // Seguro
-      let seguro = 0;
-      if (s.plano.seguroAtivo) {
-        const sv = num(s.plano.seguroValor);
-        if (s.plano.seguroTipo === 'pct_credito') {
-          if (!isNum(sv)) { seguro = null; pend.push('Seguro: percentual não informado'); }
-          else if (!isNum(credAtual)) { seguro = null; pend.push(motivoIndice(s.reajuste.credito, 'do crédito')); }
-          else seguro = (sv / 100) * credAtual;
-        } else if (s.plano.seguroTipo === 'fixo') {
-          if (!isNum(sv)) { seguro = null; pend.push('Seguro: valor mensal não informado'); }
-          else seguro = sv;
-        } else {
-          seguro = null;
-          pend.push('Seguro: regra de cobrança a definir');
-        }
-      }
-
-      // Outros custos
-      let outros = 0;
-      for (const oc of s.plano.outrosCustos || []) {
-        if (!oc || (!oc.desc && !isNum(num(oc.valor)))) continue;
-        const val = num(oc.valor);
-        if (oc.tipo === 'mensal') {
-          if (!isNum(val)) { outros = null; pend.push('Outro custo "' + (oc.desc || 'sem descrição') + '": valor não informado'); }
-          else if (outros !== null) outros += val;
-        } else if (oc.tipo === 'unico') {
-          const mo = num(oc.mes);
-          if (!isNum(val) || !isNum(mo)) { outros = null; pend.push('Outro custo "' + (oc.desc || 'sem descrição') + '": valor ou mês não informado'); }
-          else if (mo === m && outros !== null) outros += val;
-        } else {
-          outros = null;
-          pend.push('Outro custo "' + (oc.desc || 'sem descrição') + '": forma de cobrança a definir');
-        }
-      }
-
-      const parcelaTotal = isNum(parcela) && isNum(seguro) ? parcela + seguro : null;
-      const totalMes = isNum(parcelaTotal) && isNum(outros) ? parcelaTotal + outros : null;
-      linhas.push({
-        m, rotulo: rotuloMes(s.plano.mesInicial, m), fp, fc, credAtual, crefP, reduzido, posRed,
-        fundoComum, taxa, fundo, parcela, seguro, parcelaTotal, outros, totalMes,
-        pend: Array.from(new Set(pend))
-      });
-    }
-    return { linhas, fimRed, nRed, nRest, redIni };
-  }
-
-  /** Soma um campo do cronograma entre os meses de..ate (inclusive). */
-  function somar(linhas, de, ate, campo) {
-    let v = 0;
-    const pend = new Set();
-    for (const l of linhas) {
-      if (l.m < de || l.m > ate) continue;
-      if (!isNum(l[campo])) { v = null; l.pend.forEach((p) => pend.add(p)); }
-      else if (v !== null) v += l[campo];
-    }
-    return { v, pend: Array.from(pend) };
-  }
-
-  // ---------------------------------------------------------------------------
-  // Lance
-  // ---------------------------------------------------------------------------
-
-  function calcularLance(s, mod, mesC, credBruto) {
-    const C = num(s.plano.credito);
-    const rc = s.recursos;
-    const cfg = s.contemplacao[mod];
-    const out = { mod, nomeMod: mod === 'fixo' ? 'Lance fixo' : 'Lance livre', alertas: [] };
-    const base = rc.baseCalculo === 'contratado' ? C : rc.baseCalculo === 'atualizado' ? credBruto : null;
-    const nomeBase = rc.baseCalculo === 'contratado' ? 'crédito contratado' : rc.baseCalculo === 'atualizado' ? 'crédito atualizado no mês da contemplação' : 'base a definir';
-    const motivoBase = 'Base de cálculo percentual do lance: regra a definir';
-
-    // Total ofertado
-    if (mod === 'fixo') {
-      const pct = num(cfg.pct);
-      if (!isNum(pct)) out.total = P('Percentual do lance fixo (regra do grupo) a definir', 'Lance fixo = % do lance fixo × base');
-      else if (!isNum(base)) out.total = P(rc.baseCalculo === 'definir' ? motivoBase : 'Crédito na contemplação não calculado', 'Lance fixo = % × base');
-      else out.total = V(pct / 100 * base, 'estimado', 'Lance fixo = ' + fmtPct(pct) + ' × ' + fmtBRL(base) + ' (' + nomeBase + ')', 'Regra do grupo informada pelo consultor');
-    } else {
-      const val = num(cfg.valor);
-      if (!isNum(val)) out.total = P('Valor ou percentual do lance livre não informado', 'Lance livre = valor informado');
-      else if (cfg.tipo === 'valor') out.total = V(val, 'informado', 'Lance livre = valor informado', 'Informado pelo consultor');
-      else if (!isNum(base)) out.total = P(rc.baseCalculo === 'definir' ? motivoBase : 'Crédito na contemplação não calculado', 'Lance livre = % × base');
-      else out.total = V(val / 100 * base, 'estimado', 'Lance livre = ' + fmtPct(val) + ' × ' + fmtBRL(base) + ' (' + nomeBase + ')', 'Premissa do consultor');
-    }
-
-    // Lance embutido
-    const usaEmb = mod === 'fixo' ? rc.embutidoEmFixo : rc.embutidoEmLivre;
-    if (!usaEmb) out.embutido = V(0, 'informado', 'Lance embutido não utilizado nesta modalidade', 'Configuração do consultor');
-    else {
-      const ev = num(rc.embutidoValor);
-      if (!isNum(ev)) out.embutido = P('Lance embutido: percentual ou valor não informado');
-      else if (rc.embutidoTipo === 'valor') out.embutido = V(ev, 'informado', 'Lance embutido = valor informado', 'Informado pelo consultor');
-      else if (!isNum(base)) out.embutido = P(rc.baseCalculo === 'definir' ? motivoBase : 'Crédito na contemplação não calculado', 'Embutido = % × base');
-      else out.embutido = V(ev / 100 * base, 'estimado', 'Lance embutido = ' + fmtPct(ev) + ' × ' + fmtBRL(base) + ' (' + nomeBase + ')', 'Regra do grupo / premissa');
-    }
-
-    // FGTS
-    const usaFgts = mod === 'fixo' ? rc.fgtsEmFixo : rc.fgtsEmLivre;
-    const fu = num(rc.fgtsUsar);
-    if (!usaFgts || !isNum(fu) || fu === 0) out.fgts = V(0, 'informado', 'FGTS não utilizado nesta modalidade', 'Configuração do consultor');
-    else if (!rc.fgtsPermitido) {
-      out.fgts = V(0, 'calculado', 'FGTS não considerado: uso não confirmado pela regra do grupo/contrato', 'Validação');
-      out.alertas.push({ nivel: 'alerta', msg: out.nomeMod + ': FGTS informado, mas o uso não foi confirmado como permitido. O FGTS não foi considerado no lance.' });
-    } else out.fgts = V(fu, 'informado', 'FGTS = valor informado para uso no lance', 'Informado pelo consultor (uso confirmado)');
-
-    // Recursos próprios (dinheiro)
-    const t = out.total.v, e = out.embutido.v, f = out.fgts.v;
-    if (rc.recursosAuto) {
-      if (isNum(t) && isNum(e) && isNum(f)) {
-        const rp = t - e - f;
-        if (rp < -0.005) {
-          out.proprios = V(0, 'calculado', 'Recursos próprios = Total − Embutido − FGTS = ' + fmtBRL(rp) + ' (negativo, ajustado para R$ 0,00)', 'Cálculo');
-          out.alertas.push({ nivel: 'erro', msg: out.nomeMod + ': lance embutido + FGTS (' + fmtBRL(e + f) + ') superam o total ofertado (' + fmtBRL(t) + ').' });
-        } else out.proprios = V(Math.max(0, rp), 'calculado', 'Recursos próprios = Total ofertado − Embutido − FGTS = ' + fmtBRL(t) + ' − ' + fmtBRL(e) + ' − ' + fmtBRL(f), 'Cálculo automático pela diferença');
-      } else out.proprios = P([].concat(out.total.pend, out.embutido.pend, out.fgts.pend), 'Recursos próprios = Total − Embutido − FGTS');
-    } else {
-      const rp = num(rc.recursosProprios);
-      out.proprios = isNum(rp) ? V(rp, 'informado', 'Recursos próprios = valor informado', 'Informado pelo consultor') : P('Recursos próprios não informados');
-    }
-
-    // Composição
-    const soma = [out.proprios.v, out.fgts.v, out.embutido.v].every(isNum) ? out.proprios.v + out.fgts.v + out.embutido.v : null;
-    out.composicao = soma === null ? P('Composição incompleta') : V(soma, 'calculado', 'Recursos próprios + FGTS + Embutido = ' + fmtBRL(out.proprios.v) + ' + ' + fmtBRL(out.fgts.v) + ' + ' + fmtBRL(out.embutido.v), 'Cálculo');
-    if (isNum(soma) && isNum(t) && Math.abs(soma - t) > 0.005) {
-      out.alertas.push({ nivel: 'erro', msg: out.nomeMod + ': soma dos recursos (' + fmtBRL(soma) + ') diferente do total ofertado (' + fmtBRL(t) + ').' });
-    }
-
-    // Limites
-    if (isNum(e) && e > 0) {
-      const lim = num(rc.embutidoLimitePct);
-      if (!isNum(lim)) out.alertas.push({ nivel: 'alerta', msg: out.nomeMod + ': limite máximo do lance embutido não informado (regra do grupo a definir).' });
-      else if (isNum(base) && e > (lim / 100) * base + 0.005) out.alertas.push({ nivel: 'erro', msg: out.nomeMod + ': lance embutido (' + fmtBRL(e) + ') superior ao limite permitido de ' + fmtPct(lim) + ' (' + fmtBRL(lim / 100 * base) + ').' });
-      else if (!isNum(base)) out.alertas.push({ nivel: 'alerta', msg: out.nomeMod + ': não foi possível verificar o limite do embutido sem a base de cálculo.' });
-    }
-    const limL = num(rc.lanceLimitePct);
-    if (isNum(limL) && isNum(t) && isNum(base) && t > (limL / 100) * base + 0.005) {
-      out.alertas.push({ nivel: 'erro', msg: out.nomeMod + ': lance total (' + fmtBRL(t) + ') superior ao limite informado de ' + fmtPct(limL) + ' (' + fmtBRL(limL / 100 * base) + ').' });
-    }
-    const fd = num(rc.fgtsDisponivel);
-    if (isNum(f) && f > 0 && isNum(fd) && f > fd + 0.005) out.alertas.push({ nivel: 'erro', msg: out.nomeMod + ': FGTS utilizado (' + fmtBRL(f) + ') maior que o FGTS disponível (' + fmtBRL(fd) + ').' });
-    if (isNum(f) && f > 0 && !isNum(fd)) out.alertas.push({ nivel: 'alerta', msg: out.nomeMod + ': FGTS disponível não informado.' });
+  function lanceSobre(s, mod, base, pctFidelidade) {
+    const l = s.lances;
+    const soEmbutido = mod === 'embutido' || mod === 'fidelidade';
+    // Lance Fidelidade: todo o lance é embutido, com o percentual da opção escolhida
+    const pctE = mod === 'fidelidade' ? num(pctFidelidade) : num(l.embutidoPct);
+    const pct = soEmbutido ? pctE : num(mod === 'fixo' ? l.fixoPct : l.livrePct);
+    const usar = soEmbutido || ((mod === 'fixo' ? l.fixoUsarEmbutido : l.livreUsarEmbutido) && l.embutidoAtivo);
+    const usaFgts = !soEmbutido && l.fgtsAtivo && (mod === 'fixo' ? l.fixoUsarFgts : l.livreUsarFgts);
+    const out = { pct, pctEmbutido: usar ? pctE : 0, usaEmbutido: usar, usaFgts, total: null, embutido: null, fgts: null, proprios: null, limitado: false };
+    if (!isNum(pct) || !isNum(base)) return out;
+    out.total = (pct / 100) * base;
+    let e = usar && isNum(pctE) ? (pctE / 100) * base : 0;
+    if (e > out.total) { e = out.total; out.limitado = true; }
+    out.embutido = e;
+    // Recursos próprios = lance − embutido. O FGTS, quando usado, faz parte dos recursos próprios
+    // (limitado a eles); fica registrado à parte só para referência (out.fgts / out.dinheiro).
+    const fv = num(l.fgtsValor);
+    out.proprios = out.total - e;
+    out.fgts = usaFgts && isNum(fv) ? Math.min(Math.max(0, fv), out.proprios) : 0;
+    out.dinheiro = out.proprios - out.fgts;
     return out;
   }
 
   // ---------------------------------------------------------------------------
-  // Cenários (Tabela A — sorteio, Tabela B — lance)
+  // Núcleo numérico de um cenário
   // ---------------------------------------------------------------------------
 
-  function cenario(s, tipo) {
-    const C = num(s.plano.credito);
-    const N = num(s.plano.prazo);
-    const ehLance = tipo === 'lance';
-    const mod = ehLance ? s.contemplacao.cenarioB : 'sorteio';
-    const cfg = s.contemplacao[mod];
-    const mesC = num(cfg.mes);
-    const res = { tipo, mod, titulo: ehLance ? 'Tabela B — Cenário hipotético de contemplação por lance' : 'Tabela A — Cenário hipotético de contemplação por sorteio', linhas: {}, alertas: [], ok: true };
-    const L = res.linhas;
-    const nomeMod = mod === 'sorteio' ? 'Sorteio' : mod === 'fixo' ? 'Lance fixo' : 'Lance livre';
-    res.nomeMod = nomeMod;
+  /**
+   * Calcula o cronograma e os totais de um cenário.
+   * @param {object} s estado
+   * @param {'sorteio'|'fixo'|'livre'} mod modalidade de contemplação
+   * @param {number} [mesCOverride] mês de contemplação (padrão: projeção do plano)
+   */
+  function nucleo(s, mod, mesCOverride, pctFidelidade) {
+    const b = basicos(s);
+    const p = s.plano;
+    const mesC = num(mesCOverride != null ? mesCOverride : p.mesContemplacao);
+    const res = { ok: false, mod, mesC, pend: b.pend.slice(), linhas: [] };
+    if (!b.ok) return res;
+    const { C, N, ta, fr, r } = b;
+    if (!isNum(mesC) || mesC < 1 || mesC > N || !Number.isInteger(mesC)) { res.pend.push('Projeção de contemplação inválida'); return res; }
 
-    if (!cfg.disponivel) res.alertas.push({ nivel: 'alerta', msg: nomeMod + ' marcado como não disponível no grupo. Cenário apresentado apenas como hipótese.' });
-    if (!isNum(C) || !isNum(N) || N < 1) { res.ok = false; res.motivo = 'Informe crédito e prazo.'; return res; }
-    if (!isNum(mesC) || mesC < 1 || mesC > N) {
-      res.ok = false;
-      res.motivo = 'Não calculado: informe um mês hipotético de contemplação (' + nomeMod.toLowerCase() + ') entre 1 e ' + N + '.';
-      return res;
+    const pendIdx = motivoIndice(p);
+    const F = [null];
+    for (let m = 1; m <= N; m++) F.push(fator(p, m));
+
+    // Adesão: % do crédito contratado, diluída em parcelas iguais (sem reajuste)
+    let adesaoMes = 0, adesaoMeses = 0, adesaoTotal = 0;
+    if (p.adesaoAtiva) {
+      const ap = num(p.adesaoPct), am = num(p.adesaoMeses);
+      if (!isNum(ap) || !isNum(am) || am < 1) res.pend.push('Adesão: percentual ou meses de diluição não informados');
+      else { adesaoMeses = Math.min(Math.round(am), N); adesaoTotal = (ap / 100) * C; adesaoMes = adesaoTotal / adesaoMeses; }
     }
-    if (!String(cfg.premissa || '').trim()) res.alertas.push({ nivel: 'alerta', msg: nomeMod + ': contemplação estimada sem premissa informada.' });
+    const seguroPct = p.seguroAtivo ? num(p.seguroPct) : 0;
+    if (p.seguroAtivo && !isNum(seguroPct)) res.pend.push('Seguro prestamista: percentual não informado');
 
-    const cr = cronograma(s, mesC);
-    res.cronograma = cr;
-    const lm = cr.linhas[mesC - 1];
+    // Recomposição do redutor: o percentual não pago até a contemplação é diluído nas parcelas restantes
+    const nRest = N - mesC;
+    const extraFC = r > 0 && nRest > 0 ? (r / 100) * mesC / (N * nRest) : 0;
+    const redutorTodo = redutorNaParcelaToda(p);
 
-    L.mes = V(lm.rotulo, 'estimado', 'Mês informado como hipótese pelo consultor', 'Premissa: ' + (cfg.premissa || 'não informada'), { nota: MSG.mesHipotetico });
-    L.credito = V(C, 'informado', 'Crédito contratado', 'Informado pelo consultor');
-    L.credBruto = isNum(lm.credAtual)
-      ? V(lm.credAtual, lm.fc === 1 ? 'calculado' : 'estimado', 'Crédito bruto = Crédito contratado × fator de reajuste do crédito = ' + fmtBRL(C) + ' × ' + fmtNum(lm.fc, 6), 'Índice: ' + nomeIndice(s.reajuste.credito), { nota: lm.fc === 1 ? '' : MSG.taxaEstimada })
-      : P(motivoIndice(s.reajuste.credito, 'do crédito'), 'Crédito bruto = Crédito × fator de reajuste');
+    const linhas = [];
+    for (let m = 1; m <= N; m++) {
+      const f = F[m];
+      const l = { m, f, reduzido: r > 0 && m <= mesC, posContemplacao: m > mesC, encerrado: false };
+      if (f === null) {
+        Object.assign(l, { credAtual: null, fundoComum: null, taxa: null, fundo: null, plano: null, adesao: null, seguro: null, total: null, pend: [pendIdx] });
+      } else {
+        const cref = C * f;
+        // Fundo comum = (100% ÷ prazo) × crédito; Taxa adm. = (TA% ÷ prazo) × crédito; Fundo de reserva = (FR% ÷ prazo) × crédito
+        // Com redutor: até a contemplação multiplica por (1 − r); depois recompõe a diferença (extraFC). Na HS vale para os três componentes.
+        const fator1 = m <= mesC ? 1 - r / 100 : 1 + extraFC * N;
+        const fatorTaxas = redutorTodo ? fator1 : 1;
+        l.credAtual = cref;
+        l.fundoComum = (1 / N) * cref * fator1;
+        l.taxa = ((ta / 100) / N) * cref * fatorTaxas;
+        l.fundo = ((fr / 100) / N) * cref * fatorTaxas;
+        l.plano = l.fundoComum + l.taxa + l.fundo;
+        l.adesao = m <= adesaoMeses ? adesaoMes : 0;
+        l.seguro = isNum(seguroPct) ? (seguroPct / 100) * cref : null;
+        l.pend = l.seguro === null ? ['Seguro prestamista: percentual não informado'] : [];
+      }
+      linhas.push(l);
+    }
 
+    // Saldo devedor na contemplação: parcelas restantes (fundo comum, taxa e fundo de reserva) a valores do mês da contemplação
+    const credBruto = F[mesC] === null ? null : C * F[mesC];
+    const fC = F[mesC];
+    const posLinhas = linhas.slice(mesC);
+    const saldoAntes = posLinhas.every((l) => isNum(l.plano)) && isNum(fC) ? posLinhas.reduce((a, l) => a + l.plano * fC / l.f, 0) : null;
+
+    // Lance e abatimento
     let lance = null;
-    if (ehLance) {
-      lance = calcularLance(s, mod, mesC, L.credBruto.v);
-      res.lance = lance;
-      res.alertas.push(...lance.alertas);
-      L.embutido = lance.embutido;
-      L.lance = lance.total;
-      L.proprios = lance.proprios;
-      L.fgts = lance.fgts;
-    } else {
-      const zero = (f) => V(0, 'informado', f, 'Cenário de sorteio: sem lance');
-      L.embutido = zero('Sem lance embutido no cenário de sorteio');
-      L.lance = zero('Sem lance no cenário de sorteio');
-      L.proprios = zero('Sem recursos próprios de lance no cenário de sorteio');
-      L.fgts = zero('Sem FGTS no cenário de sorteio');
-    }
-    L.embutidoUsado = Object.assign({}, L.embutido);
-
-    // Crédito líquido
-    const e = L.embutido.v;
-    if (!isNum(L.credBruto.v)) L.credLiquido = P(L.credBruto.pend, 'Crédito líquido = Crédito bruto − Lance embutido');
-    else if (!isNum(e)) L.credLiquido = P(L.embutido.pend, 'Crédito líquido = Crédito bruto − Lance embutido');
-    else if (e === 0) L.credLiquido = V(L.credBruto.v, L.credBruto.tipo, 'Crédito líquido = Crédito bruto (sem lance embutido)', 'Cálculo');
-    else if (s.recursos.embutidoTratamento === 'descontar') L.credLiquido = V(L.credBruto.v - e, 'estimado', 'Crédito líquido = Crédito bruto − Lance embutido = ' + fmtBRL(L.credBruto.v) + ' − ' + fmtBRL(e), 'Regra configurada: embutido descontado do crédito na contemplação');
-    else L.credLiquido = P(MSG.embutidoSemRegra, 'Crédito líquido = depende da regra do lance embutido');
-
-    // Parcelas
-    L.parcelaMes = isNum(lm.parcelaTotal)
-      ? V(lm.parcelaTotal, 'estimado', 'Parcela do mês ' + mesC + ' = Fundo comum ' + fmtBRL(lm.fundoComum) + ' + Taxa adm. ' + fmtBRL(lm.taxa) + ' + Fundo de reserva ' + fmtBRL(lm.fundo) + ' + Seguro ' + fmtBRL(lm.seguro), (lm.reduzido ? 'Com redutor. ' : lm.posRed ? 'Após o redutor (recomposição). ' : '') + 'Índice da parcela: ' + nomeIndice(s.reajuste.parcela))
-      : P(lm.pend, 'Parcela = Fundo comum + Taxa adm. + Fundo de reserva + Seguro');
-    L.qtdParcelas = V(mesC, 'estimado', 'Parcelas pagas do mês 1 ao mês ' + mesC + ' (a parcela do mês da contemplação é considerada paga)', 'Premissa de cálculo');
-    const sp = somar(cr.linhas, 1, mesC, 'parcela');
-    const ss = somar(cr.linhas, 1, mesC, 'seguro');
-    const so = somar(cr.linhas, 1, mesC, 'outros');
-    L.parcelasSemSeguro = sp.v === null ? P(sp.pend, 'Σ parcelas (sem seguro) meses 1..' + mesC) : V(sp.v, 'estimado', 'Σ parcelas (fundo comum + taxa adm. + fundo de reserva) dos meses 1 a ' + mesC, 'Demonstrativo mensal');
-    L.seguroPago = ss.v === null ? P(ss.pend, 'Σ seguro meses 1..' + mesC) : V(ss.v, 'estimado', 'Σ seguro dos meses 1 a ' + mesC, 'Demonstrativo mensal');
-    L.totalParcelas = sp.v === null || ss.v === null ? P([].concat(sp.pend, ss.pend), 'Σ parcelas + Σ seguro') : V(sp.v + ss.v, 'estimado', 'Total de parcelas = Σ parcelas ' + fmtBRL(sp.v) + ' + Σ seguro ' + fmtBRL(ss.v), 'Demonstrativo mensal');
-    L.outrosPagos = so.v === null ? P(so.pend, 'Σ outros custos meses 1..' + mesC) : V(so.v, 'estimado', 'Σ outros custos dos meses 1 a ' + mesC, 'Outros custos configurados');
-
-    // Total aportado (dinheiro + FGTS). O embutido NÃO é aporte: sai do crédito.
-    const comp = [L.totalParcelas, L.outrosPagos, L.proprios, L.fgts];
-    if (comp.every((x) => isNum(x.v))) {
-      const tot = L.totalParcelas.v + L.outrosPagos.v + L.proprios.v + L.fgts.v;
-      L.totalAportado = V(tot, 'estimado', 'Total aportado = Parcelas ' + fmtBRL(L.totalParcelas.v) + ' + Outros custos ' + fmtBRL(L.outrosPagos.v) + ' + Recursos próprios ' + fmtBRL(L.proprios.v) + ' + FGTS ' + fmtBRL(L.fgts.v), 'O lance embutido não é somado: é descontado do crédito, não sai do participante.');
-      L.desembolsoDinheiro = V(tot - L.fgts.v, 'estimado', 'Desembolso em dinheiro = Total aportado − FGTS', 'Cálculo');
-    } else {
-      const pend = comp.reduce((a, x) => a.concat(x.pend || []), []);
-      L.totalAportado = P(pend, 'Parcelas + Outros custos + Recursos próprios + FGTS');
-      L.desembolsoDinheiro = P(pend, 'Total aportado − FGTS');
-    }
-
-    // Venda
-    const vd = s.venda;
-    if (!vd.ativa) {
-      L.vendaBruta = V(null, 'na', 'Venda não simulada', '', { nota: 'Venda simulada desativada' });
-      L.vendaCustos = V(null, 'na', 'Venda não simulada', '');
-      L.vendaLiquida = V(null, 'na', 'Venda não simulada', '');
-    } else {
-      if (vd.base === 'valor') {
-        const vv = num(vd.valor);
-        L.vendaBruta = isNum(vv) ? V(vv, 'estimado', 'Valor de venda = valor informado (hipótese)', 'Premissa do consultor') : P('Venda simulada sem premissa de preço');
-      } else {
-        const pct = num(vd.pct);
-        const baseV = vd.base === 'pct_bruto' ? L.credBruto : L.credLiquido;
-        const nomeB = vd.base === 'pct_bruto' ? 'crédito bruto' : 'crédito líquido';
-        if (!isNum(pct)) L.vendaBruta = P('Venda simulada sem premissa de preço');
-        else if (!isNum(baseV.v)) L.vendaBruta = P(baseV.pend, 'Valor de venda = % × ' + nomeB);
-        else L.vendaBruta = V(pct / 100 * baseV.v, 'estimado', 'Valor de venda = ' + fmtPct(pct) + ' × ' + nomeB + ' ' + fmtBRL(baseV.v), 'Premissa do consultor (hipótese, sem garantia de liquidez)');
+    if (mod !== 'sorteio') {
+      lance = lanceSobre(s, mod, credBruto, pctFidelidade);
+      if (!isNum(lance.pct)) res.pend.push('Percentual do ' + NOMES_MOD[mod].toLowerCase() + ' não informado');
+      if (lance.usaEmbutido && !isNum(lance.pctEmbutido)) res.pend.push('Percentual do lance embutido não informado');
+      const pos = linhas.slice(mesC);
+      if (isNum(lance.total) && lance.total > 0 && pos.length && pos.every((l) => isNum(l.plano))) {
+        const bases = pos.map((l) => l.plano * fC / l.f); // saldo a valores do mês da contemplação
+        const saldo = bases.reduce((a, x) => a + x, 0);
+        if (p.abatimento === 'prazo') {
+          let resto = lance.total;
+          for (let i = pos.length - 1; i >= 0 && resto > 1e-9; i--) {
+            const l = pos[i];
+            if (resto >= bases[i] - 1e-9) { resto -= bases[i]; escalar(l, 0); l.encerrado = true; l.seguro = 0; l.adesao = 0; }
+            else { escalar(l, 1 - resto / bases[i]); resto = 0; }
+          }
+        } else {
+          const k = Math.max(0, 1 - lance.total / saldo);
+          pos.forEach((l) => escalar(l, k));
+          if (k === 0) pos.forEach((l) => { l.encerrado = true; l.seguro = 0; l.adesao = 0; });
+        }
+        res.saldoNaContemplacao = saldo;
       }
-      const com = num(vd.comissaoPct);
-      const fix = num(vd.custosFixos);
-      if (!isNum(com) && !isNum(fix)) {
-        L.vendaCustos = P('Venda simulada sem premissa de custos (informe 0 se não houver)');
-      } else if (!isNum(L.vendaBruta.v)) {
-        L.vendaCustos = P(L.vendaBruta.pend, 'Custos = % comissão/taxas × valor de venda + custos fixos');
-      } else {
-        const c = (isNum(com) ? com / 100 * L.vendaBruta.v : 0) + (isNum(fix) ? fix : 0);
-        L.vendaCustos = V(c, 'estimado', 'Custos = ' + fmtPct(com || 0) + ' × ' + fmtBRL(L.vendaBruta.v) + ' + ' + fmtBRL(fix || 0), 'Premissa do consultor');
-      }
-      L.vendaLiquida = isNum(L.vendaBruta.v) && isNum(L.vendaCustos.v)
-        ? V(L.vendaBruta.v - L.vendaCustos.v, 'estimado', 'Valor líquido = Valor de venda − Custos = ' + fmtBRL(L.vendaBruta.v) + ' − ' + fmtBRL(L.vendaCustos.v), 'Cálculo sobre premissas')
-        : P([].concat(L.vendaBruta.pend || [], L.vendaCustos.pend || []), 'Valor de venda − Custos');
     }
+    linhas.forEach((l) => { l.total = [l.plano, l.adesao, l.seguro].every(isNum) ? l.plano + l.adesao + l.seguro : null; });
 
-    // Resultado financeiro estimado (fórmula editável por componentes)
-    const rs = s.resultado;
-    const componentes = [];
-    if (vd.ativa) componentes.push({ nome: 'Valor líquido recebido na venda', sinal: +1, val: L.vendaLiquida });
-    if (rs.incluirParcelas) componentes.push({ nome: 'Parcelas pagas até a contemplação (sem seguro)', sinal: -1, val: L.parcelasSemSeguro });
-    if (rs.incluirSeguro) componentes.push({ nome: 'Seguro pago até a contemplação', sinal: -1, val: L.seguroPago });
-    if (rs.incluirOutros) componentes.push({ nome: 'Outros custos pagos pelo participante', sinal: -1, val: L.outrosPagos });
-    if (rs.incluirProprios) componentes.push({ nome: 'Recursos próprios usados no lance', sinal: -1, val: L.proprios });
-    if (rs.fgtsTratamento === 'deduzir') componentes.push({ nome: 'FGTS usado no lance (tratado como patrimônio do participante)', sinal: -1, val: L.fgts });
-    for (const fl of rs.fluxos || []) {
-      const fv = num(fl.valor);
-      if (!fl.desc && !isNum(fv)) continue;
-      componentes.push({ nome: 'Fluxo: ' + (fl.desc || 'sem descrição'), sinal: +1, val: isNum(fv) ? V(fv, 'informado', 'Valor informado', 'Consultor') : P('Fluxo sem valor') });
-    }
-    res.componentes = componentes;
-    if (!vd.ativa) {
-      L.resultado = V(null, 'na', 'Resultado não calculado: venda da carta não simulada', '', { nota: 'Ative a venda simulada para estimar o resultado.' });
-    } else if (componentes.every((c) => isNum(c.val.v))) {
-      const tot = componentes.reduce((a, c) => a + c.sinal * c.val.v, 0);
-      L.resultado = V(tot, 'estimado', componentes.map((c) => (c.sinal > 0 ? '+ ' : '− ') + c.nome + ' ' + fmtBRL(c.val.v)).join('\n'), 'Fórmula configurável', { nota: MSG.estimado });
-    } else {
-      L.resultado = P(componentes.reduce((a, c) => a.concat(c.val.pend || []), []), 'Resultado = Σ componentes configurados');
-    }
+    // Totais
+    const soma = (de, ate, campo) => {
+      let v = 0;
+      for (let m = de; m <= ate; m++) { const x = linhas[m - 1][campo]; if (!isNum(x)) return null; v += x; }
+      return v;
+    };
+    res.linhas = linhas;
+    res.C = C; res.N = N;
+    res.credBruto = credBruto;
+    res.lance = lance;
+    res.embutido = lance && isNum(lance.embutido) ? lance.embutido : lance ? null : 0;
+    res.credLiquido = isNum(credBruto) && isNum(res.embutido) ? credBruto - res.embutido : null;
+    res.parcelaMes = linhas[mesC - 1].total;
+    res.pagoPlano = soma(1, mesC, 'plano');
+    res.pagoSeguro = soma(1, mesC, 'seguro');
+    res.pagoAdesao = soma(1, mesC, 'adesao');
+    res.totalParcelas = soma(1, mesC, 'total');
+    res.proprios = lance ? lance.proprios : 0;
+    res.fgts = lance && isNum(lance.fgts) ? lance.fgts : 0;
+    res.lanceTotal = lance ? lance.total : 0;
+    res.totalAportado = isNum(res.totalParcelas) && isNum(res.proprios) ? res.totalParcelas + res.proprios : null;
+    res.venda = isNum(res.credLiquido) ? (REGRAS.vendaPct / 100) * res.credLiquido : null;
+    res.resultado = isNum(res.venda) && isNum(res.totalAportado) ? res.venda - res.totalAportado : null;
+    res.rentabilidade = isNum(res.resultado) && res.totalAportado > 0 ? (res.resultado / res.totalAportado) * 100 : null;
+    const posAtivas = linhas.slice(mesC).filter((l) => !l.encerrado);
+    res.parcelaPos = mesC < N ? (posAtivas.length ? posAtivas[0].total : 0) : null;
+    res.prazoRestante = linhas.slice(mesC).filter((l) => !l.encerrado).length;
+    res.obrigacoes = mesC < N ? soma(mesC + 1, N, 'total') : 0;
+    // Valores pós-contemplação a preços do mês da contemplação (sem reajustes futuros)
+    res.saldoDevedor = isNum(saldoAntes) ? Math.max(0, saldoAntes - (isNum(res.lanceTotal) ? res.lanceTotal : 0)) : null;
+    const pa = posAtivas[0];
+    res.parcelaPosAtual = mesC >= N ? null : !pa ? 0 : [pa.plano, pa.adesao, pa.seguro].every(isNum) && isNum(fC) ? pa.plano * fC / pa.f + pa.adesao + pa.seguro * fC / pa.f : null;
+    res.totalPlano = soma(1, N, 'total');
+    linhas.forEach((l) => l.pend.forEach((x) => res.pend.push(x)));
+    res.pend = Array.from(new Set(res.pend));
+    res.ok = true;
+    return res;
+  }
 
-    // Obrigações futuras (parcelas após a contemplação)
-    const of = somar(cr.linhas, mesC + 1, N, 'parcelaTotal');
-    if (mesC >= N) L.obrigacoes = V(0, 'estimado', 'Sem parcelas após o mês da contemplação', 'Demonstrativo');
-    else if (of.v === null) L.obrigacoes = P(of.pend, 'Σ parcelas dos meses ' + (mesC + 1) + ' a ' + N);
-    else if (ehLance && isNum(L.lance.v) && L.lance.v > 0) {
-      if (s.contemplacao.abatimento === 'nominal') {
-        L.obrigacoes = V(Math.max(0, of.v - L.lance.v), 'estimado', 'Obrigações = Σ parcelas meses ' + (mesC + 1) + '–' + N + ' ' + fmtBRL(of.v) + ' − Lance ' + fmtBRL(L.lance.v) + ' (abatimento nominal)', 'Aproximação configurada pelo consultor', { nota: 'Aproximação: a forma real de amortização do lance depende da administradora.' });
-      } else {
-        L.obrigacoes = V(of.v, 'estimado', 'Σ parcelas projetadas dos meses ' + (mesC + 1) + ' a ' + N + ', SEM abatimento do lance', 'Demonstrativo mensal', { nota: 'Regra a definir: a forma de amortização do saldo pelo lance (redução de prazo ou de parcela) depende da administradora.' });
-      }
+  function escalar(l, k) {
+    ['fundoComum', 'taxa', 'fundo', 'plano'].forEach((c) => { if (isNum(l[c])) l[c] *= k; });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Cenário com memória de cálculo (tabelas de cenários)
+  // ---------------------------------------------------------------------------
+
+  const NOMES_MOD = { sorteio: 'Sorteio', embutido: 'Lance Embutido', fixo: 'Lance Fixo', livre: 'Lance Livre', fidelidade: 'Lance Fidelidade' };
+  const TITULOS = {
+    sorteio: 'Contemplação por sorteio',
+    embutido: 'Contemplação por lance embutido',
+    fixo: 'Contemplação por lance fixo',
+    livre: 'Contemplação por lance livre'
+  };
+
+  function cenario(s, mod) {
+    const n = nucleo(s, mod);
+    const res = { mod, nome: NOMES_MOD[mod], titulo: TITULOS[mod], ok: n.ok, nucleo: n, linhas: {}, alertas: [] };
+    if (!n.ok) { res.motivo = 'Não calculado: ' + n.pend.join('; ') + '.'; return res; }
+    const L = res.linhas;
+    const p = s.plano;
+    const mesC = n.mesC;
+    const lm = n.linhas[mesC - 1];
+    const val = (v, tipo, formula, origem, extra) => (isNum(v) ? V(v, tipo, formula, origem, extra) : P(n.pend.length ? n.pend : ['Dado não informado'], formula));
+
+    L.mes = V('Mês ' + mesC, 'estimado', 'Projeção de contemplação informada no plano', 'Dados do plano', { nota: MSG.mesHipotetico });
+    L.credito = V(n.C, 'informado', 'Crédito contratado', 'Informado pelo consultor');
+    L.credBruto = isNum(n.credBruto)
+      ? V(n.credBruto, lm.f === 1 ? 'calculado' : 'estimado', 'Crédito na contemplação = ' + fmtBRL(n.C) + ' × fator de reajuste ' + fmtNum(lm.f, 6) + ' (' + qtdReajustes(mesC) + ' reajuste(s) anual(is))', 'Índice: ' + nomeIndice(p), { nota: lm.f === 1 ? '' : MSG.taxaEstimada })
+      : P([motivoIndice(p)], 'Crédito × fator de reajuste');
+
+    if (mod === 'sorteio') {
+      L.lance = V(0, 'na', 'Sem lance no cenário de sorteio', '');
+      L.embutido = V(0, 'na', 'Sem lance embutido no cenário de sorteio', '');
+      L.proprios = V(0, 'na', 'Sem recursos próprios de lance no cenário de sorteio', '');
     } else {
-      L.obrigacoes = V(of.v, 'estimado', 'Σ parcelas projetadas dos meses ' + (mesC + 1) + ' a ' + N, 'Demonstrativo mensal', { nota: 'Em caso de venda, a transferência das obrigações ao comprador depende da administradora e do contrato.' });
+      const lc = n.lance;
+      const base = fmtBRL(n.credBruto);
+      L.lance = val(lc.total, 'estimado', 'Lance = ' + fmtPct(lc.pct) + ' × crédito na contemplação ' + base, mod === 'fixo' ? 'Percentual do lance fixo (administradora)' : mod === 'embutido' ? 'Lance composto só pelo embutido' : 'Percentual ofertado no lance livre');
+      L.embutido = lc.usaEmbutido
+        ? val(lc.embutido, 'estimado', 'Lance embutido = ' + fmtPct(lc.pctEmbutido) + ' × ' + base + (lc.limitado ? ' (limitado ao valor total do lance)' : ''), 'Percentual do lance embutido (administradora)')
+        : V(0, 'calculado', '"Usar embutido" desmarcado para esta modalidade', 'Configuração');
+      L.proprios = val(lc.proprios, 'estimado', 'Recursos próprios = Lance ' + fmtBRL(lc.total) + ' − Embutido ' + fmtBRL(lc.embutido), 'Cálculo');
+      if (lc.limitado) res.alertas.push({ nivel: 'alerta', msg: res.nome + ': o lance embutido é maior que o lance total; foi limitado ao valor do lance.' });
     }
+    L.credLiquido = val(n.credLiquido, n.embutido > 0 ? 'estimado' : L.credBruto.tipo, n.embutido > 0 ? 'Crédito líquido = ' + fmtBRL(n.credBruto) + ' − embutido ' + fmtBRL(n.embutido) : 'Crédito líquido = crédito na contemplação (sem embutido)', 'Cálculo');
+
+    L.parcelaMes = isNum(lm.total)
+      ? V(lm.total, 'estimado', 'Parcela do mês ' + mesC + ' = Fundo comum ' + fmtBRL(lm.fundoComum) + ' + Taxa adm. ' + fmtBRL(lm.taxa) + ' + Fundo de reserva ' + fmtBRL(lm.fundo) + ' + Adesão ' + fmtBRL(lm.adesao) + ' + Seguro ' + fmtBRL(lm.seguro), lm.reduzido ? 'Com redutor de ' + fmtPct(redutorPct(s.parcela), 0) : 'Parcela integral')
+      : P(lm.pend.length ? lm.pend : n.pend, 'Parcela do mês');
+    L.qtdParcelas = V(mesC, 'estimado', 'Parcelas pagas do mês 1 ao mês ' + mesC + ' (inclui a do mês da contemplação)', 'Projeção de contemplação');
+    L.totalParcelas = val(n.totalParcelas, 'estimado', 'Σ parcelas meses 1–' + mesC + ' = Plano ' + fmtBRL(n.pagoPlano) + ' + Adesão ' + fmtBRL(n.pagoAdesao) + ' + Seguro ' + fmtBRL(n.pagoSeguro), 'Demonstrativo mensal');
+    L.totalAportado = val(n.totalAportado, 'estimado', 'Total aportado = Parcelas pagas ' + fmtBRL(n.totalParcelas) + ' + Recursos próprios do lance ' + fmtBRL(n.proprios), 'O lance embutido não é somado: ele sai do crédito, não do cliente.');
+    L.venda = val(n.venda, 'estimado', 'Venda = ' + REGRAS.vendaPct + '% × crédito líquido ' + fmtBRL(n.credLiquido), 'Premissa fixa do simulador (hipótese, sem garantia de venda)');
+    L.resultado = val(n.resultado, 'estimado', 'Resultado = Venda ' + fmtBRL(n.venda) + ' − Total aportado ' + fmtBRL(n.totalAportado), 'Cálculo', { nota: MSG.estimado });
+    L.rentabilidade = isNum(n.rentabilidade) ? V(n.rentabilidade, 'estimado', 'Rentabilidade = Resultado ÷ Total aportado = ' + fmtBRL(n.resultado) + ' ÷ ' + fmtBRL(n.totalAportado), 'Cálculo', { nota: MSG.estimado }) : P(n.pend.length ? n.pend : ['Total aportado não calculado'], 'Resultado ÷ Total aportado');
+
+    const abat = p.abatimento === 'prazo' ? 'redução do prazo (parcelas quitadas a partir do fim do plano)' : 'redução proporcional do valor das parcelas restantes';
+    if (mesC >= n.N) {
+      L.parcelaPos = V(null, 'na', 'Contemplação no último mês: não há parcelas posteriores', '');
+      L.prazoRestante = V(0, 'calculado', 'Sem parcelas após a contemplação', '');
+    } else {
+      const notaAbat = mod === 'sorteio' ? '' : 'Lance abatido por ' + abat + '.';
+      L.parcelaPos = val(n.parcelaPos, 'estimado', 'Parcela do mês ' + (mesC + 1) + (s.parcela.modalidade !== 'integral' ? ', com a diferença do redutor diluída nas parcelas restantes' : '') + (mod !== 'sorteio' ? ', após o abatimento do lance' : ''), 'Demonstrativo mensal', { nota: notaAbat });
+      L.prazoRestante = V(n.prazoRestante, 'estimado', 'Parcelas restantes após a contemplação' + (mod !== 'sorteio' && p.abatimento === 'prazo' ? ' (prazo reduzido pelo lance)' : ''), 'Demonstrativo mensal');
+    }
+    L.saldoDevedor = val(n.saldoDevedor, 'estimado', 'Saldo devedor = saldo das parcelas restantes a valores do mês da contemplação ' + fmtBRL(n.saldoDevedor + (n.lanceTotal || 0)) + ' − lance ' + fmtBRL(n.lanceTotal || 0), 'Sem reajustes futuros; exclui seguro');
+    L.obrigacoes = val(n.obrigacoes, 'estimado', 'Σ parcelas projetadas após a contemplação', 'Demonstrativo mensal', { nota: 'Em caso de venda, as parcelas restantes passam ao comprador, conforme as regras da administradora.' });
     return res;
   }
 
   // ---------------------------------------------------------------------------
-  // Validações gerais
+  // Validações
   // ---------------------------------------------------------------------------
 
   function validar(s) {
@@ -622,229 +505,355 @@
     const add = (nivel, campo, msg) => a.push({ nivel, campo, msg });
     const p = s.plano;
     const C = num(p.credito), N = num(p.prazo);
-    if (!String(p.lead || '').trim()) add('erro', 'plano.lead', 'Campo obrigatório: nome do lead ou identificação da simulação.');
+    if (!String(p.lead || '').trim()) add('erro', 'plano.lead', 'Campo obrigatório: nome completo.');
+    if (isNum(num(p.creditoMinimo)) && isNum(C) && C < num(p.creditoMinimo)) add('erro', 'plano.credito', 'Crédito abaixo do mínimo do plano selecionado (' + fmtBRL(num(p.creditoMinimo)) + ').');
+    if (!p.administradora) add('info', 'plano.administradora', 'Administradora não selecionada.');
     if (!isNum(C)) add('erro', 'plano.credito', 'Campo obrigatório: valor do crédito.');
     else if (C <= 0) add('erro', 'plano.credito', 'O valor do crédito deve ser maior que zero.');
-    if (!isNum(N)) add('erro', 'plano.prazo', 'Campo obrigatório: prazo total do plano.');
-    else if (N < 1 || !Number.isInteger(N)) add('erro', 'plano.prazo', 'Prazo inválido: informe um número inteiro de meses maior que zero.');
+    if (!isNum(N)) add('erro', 'plano.prazo', 'Campo obrigatório: prazo total.');
+    else if (N < 1 || !Number.isInteger(N)) add('erro', 'plano.prazo', 'Prazo inválido: informe um número inteiro de meses.');
     else if (N > 420) add('alerta', 'plano.prazo', 'Prazo acima de 420 meses: confirme com a administradora.');
-    if (!p.mesInicial) add('info', 'plano.mesInicial', 'Mês inicial não informado: os meses serão exibidos apenas pela numeração.');
-    const ta = num(p.taxaAdm);
-    if (!isNum(ta)) add('erro', 'plano.taxaAdm', 'Campo obrigatório: taxa de administração total (%).');
-    else if (ta < 0 || ta > 100) add('erro', 'plano.taxaAdm', 'Percentual inválido na taxa de administração (0 a 100%).');
-    const fr = num(p.frValor);
-    if (!isNum(fr)) add('erro', 'plano.frValor', 'Campo obrigatório: fundo de reserva (informe 0 se não houver).');
-    else if (fr < 0) add('erro', 'plano.frValor', 'Fundo de reserva não pode ser negativo.');
-    else if (p.frTipo === 'pct' && fr > 100) add('erro', 'plano.frValor', 'Percentual inválido no fundo de reserva.');
+    const mc = num(p.mesContemplacao);
+    if (!isNum(mc)) add('erro', 'plano.mesContemplacao', 'Campo obrigatório: projeção de contemplação (mês).');
+    else if (mc < 1 || !Number.isInteger(mc) || (isNum(N) && mc > N)) add('erro', 'plano.mesContemplacao', 'Projeção de contemplação deve ser um mês entre 1 e o prazo.');
+    for (const [k, rot] of [['taxaAdm', 'taxa de administração'], ['fundoReserva', 'fundo de reserva']]) {
+      const v = num(p[k]);
+      if (!isNum(v)) add('erro', 'plano.' + k, 'Campo obrigatório: ' + rot + ' (%). Informe 0 se não houver.');
+      else if (v < 0 || v > 100) add('erro', 'plano.' + k, 'Percentual inválido em ' + rot + ' (0 a 100%).');
+    }
+    if (p.adesaoAtiva) {
+      const ap = num(p.adesaoPct), am = num(p.adesaoMeses);
+      if (!isNum(ap)) add('erro', 'plano.adesaoPct', 'Adesão ativada: informe o percentual.');
+      else if (ap < 0 || ap > 100) add('erro', 'plano.adesaoPct', 'Percentual de adesão inválido.');
+      if (!isNum(am)) add('erro', 'plano.adesaoMeses', 'Adesão ativada: informe os meses de diluição.');
+      else if (am < 1 || !Number.isInteger(am) || (isNum(N) && am > N)) add('erro', 'plano.adesaoMeses', 'Meses de diluição da adesão devem estar entre 1 e o prazo.');
+    }
     if (p.seguroAtivo) {
-      if (p.seguroTipo === 'definir') add('alerta', 'plano.seguroTipo', 'Seguro ativado sem regra: informe a forma de cobrança (Regra a definir).');
-      else if (!isNum(num(p.seguroValor))) add('erro', 'plano.seguroValor', 'Seguro ativado sem valor.');
-      else if (num(p.seguroValor) < 0) add('erro', 'plano.seguroValor', 'Valor do seguro não pode ser negativo.');
+      const sp = num(p.seguroPct);
+      if (!isNum(sp)) add('erro', 'plano.seguroPct', 'Seguro prestamista ativado: informe o percentual.');
+      else if (sp < 0 || sp > 100) add('erro', 'plano.seguroPct', 'Percentual do seguro prestamista inválido.');
     }
-    (p.outrosCustos || []).forEach((oc, i) => {
-      if (!oc.desc && !isNum(num(oc.valor))) return;
-      if (oc.tipo === 'definir') add('alerta', 'plano.outrosCustos', 'Outro custo "' + (oc.desc || '#' + (i + 1)) + '": forma de cobrança a definir.');
-      if (isNum(num(oc.valor)) && num(oc.valor) < 0) add('erro', 'plano.outrosCustos', 'Outro custo "' + (oc.desc || '#' + (i + 1)) + '": valor negativo.');
-      if (oc.tipo === 'unico' && isNum(N) && (!isNum(num(oc.mes)) || num(oc.mes) < 1 || num(oc.mes) > N)) add('erro', 'plano.outrosCustos', 'Outro custo "' + (oc.desc || '#' + (i + 1)) + '": mês de cobrança inválido.');
-    });
+    if (!INDICES[p.indice]) add('erro', 'plano.indice', 'Selecione o índice de reajuste.');
+    else if (!isNum(taxaIndice(p))) {
+      if (!isNum(N) || N > 12) add('erro', 'plano.indiceTaxa', 'Índice ' + nomeIndice(p) + ' sem premissa de projeção: informe a taxa estimada ao ano.');
+    } else if (indiceEstimado(p)) add('info', 'plano.indiceTaxa', MSG.taxaEstimada);
 
-    // Redutor
-    const pr = s.parcela;
-    if (pr.modalidade !== 'integral') {
-      const r = redutorPct(pr);
-      if (!isNum(r) || r <= 0 || r >= 100) add('erro', 'parcela.redutorOutro', 'Percentual de redução inválido (deve ser maior que 0% e menor que 100%).');
-      const ini = num(pr.redIni), fim = num(pr.redFim);
-      if (!isNum(fim) && !pr.encerrarNaContemplacao) add('erro', 'parcela.redFim', 'Redutor ativado sem período: informe o último mês com redutor.');
-      if (isNum(ini) && isNum(fim) && fim < ini) add('erro', 'parcela.redFim', 'O último mês do redutor deve ser maior ou igual ao mês inicial.');
-      if (isNum(fim) && isNum(N) && fim >= N) add('alerta', 'parcela.redFim', 'O redutor cobre todo o prazo: o fundo comum não seria integralizado nesta projeção.');
-      if (pr.recomposicao === 'definir') add('alerta', 'parcela.recomposicao', MSG.recomposicao + ' A projeção após o redutor não será calculada.');
-      if (pr.recomposicao === 'manual' && !isNum(num(pr.parcelaManual))) add('erro', 'parcela.parcelaManual', 'Informe o valor da parcela após o redutor.');
+    if (s.parcela.modalidade === 'outro') {
+      const r = num(s.parcela.redutorOutro);
+      if (!isNum(r) || r <= 0 || r >= 100) add('erro', 'parcela.redutorOutro', 'Percentual de redução inválido (maior que 0% e menor que 100%).');
     }
 
-    // Reajuste
-    const rj = s.reajuste;
-    for (const [k, rot] of [['credito', 'do crédito'], ['parcela', 'da parcela']]) {
-      const c = rj[k];
-      if (c.indice === 'definir') add('alerta', 'reajuste.' + k, 'Índice de reajuste ' + rot + ': regra a definir. Valores após o primeiro reajuste não serão calculados.');
-      else if (!isNum(taxaIndice(c))) add('erro', 'reajuste.' + k, 'Índice ' + nomeIndice(c) + ' selecionado para reajuste ' + rot + ' sem premissa de projeção (informe a taxa estimada por período).');
-      else if (['ipca', 'incc', 'inpc', 'outro'].includes(c.indice)) add('info', 'reajuste.' + k, 'Reajuste ' + rot + ': ' + MSG.taxaEstimada);
+    const l = s.lances;
+    const pctOk = (campo, rot) => {
+      const v = num(l[campo]);
+      if (!isNum(v)) add('erro', 'lances.' + campo, rot + ': informe o percentual.');
+      else if (v < 0 || v > 100) add('erro', 'lances.' + campo, rot + ': percentual inválido (0 a 100%).');
+    };
+    const fid = s.fidelidade;
+    if (fid && fid.ativo) {
+      [1, 2, 3].forEach((i) => {
+        const pa = num(fid['p' + i + 'Parcela']), pc = num(fid['p' + i + 'Pct']);
+        if (!isNum(pa) || pa < 1 || !Number.isInteger(pa) || (isNum(N) && pa > N)) add('erro', 'fidelidade.p' + i + 'Parcela', 'Lance Fidelidade ' + i + ': parcela inicial deve estar entre 1 e o prazo.');
+        if (!isNum(pc) || pc < 0 || pc > 100) add('erro', 'fidelidade.p' + i + 'Pct', 'Lance Fidelidade ' + i + ': percentual inválido (0 a 100%).');
+      });
     }
-    if (!isNum(num(rj.periodicidade)) || num(rj.periodicidade) < 1) add('erro', 'reajuste.periodicidade', 'Periodicidade do reajuste inválida.');
-    if (!isNum(num(rj.primeiroMes)) || num(rj.primeiroMes) < 1) add('erro', 'reajuste.primeiroMes', 'Mês do primeiro reajuste inválido.');
-    if (rj.credito.indice !== rj.parcela.indice && rj.credito.indice !== 'definir' && rj.parcela.indice !== 'definir') add('info', 'reajuste', 'Índices diferentes para crédito e parcela: a relação entre crédito e parcelas se altera ao longo do prazo.');
-
-    // Recursos
-    const rc = s.recursos;
-    for (const [campo, rot] of [['fgtsDisponivel', 'FGTS disponível'], ['fgtsUsar', 'FGTS a utilizar'], ['embutidoValor', 'lance embutido'], ['recursosProprios', 'recursos próprios']]) {
-      if (isNum(num(rc[campo])) && num(rc[campo]) < 0) add('erro', 'recursos.' + campo, 'Valor negativo em ' + rot + '.');
+    const mec = s.mecanismo;
+    if (mec && mec.ativo) {
+      const m2 = num(mec.mesNovas);
+      if (!isNum(m2) || m2 < 1 || !Number.isInteger(m2) || (isNum(N) && m2 > N)) add('erro', 'mecanismo.mesNovas', 'Mecanismo de Alavancagem: mês de contemplação das novas cartas deve estar entre 1 e o prazo.');
+      [1, 2, 3, 4].forEach((i) => {
+        const q = mec['q' + i];
+        if (q !== null && q !== '' && q !== undefined && (!isNum(num(q)) || num(q) < 1 || !Number.isInteger(num(q)))) add('erro', 'mecanismo.q' + i, 'Mecanismo de Alavancagem: quantidade de cartas do cenário ' + i + ' deve ser um número inteiro (1 ou mais).');
+      });
+      if (!mec.q1 && !mec.q2 && !mec.q3 && !mec.q4) add('aviso', 'mecanismo.q1', 'Mecanismo de Alavancagem: informe a quantidade de cartas em pelo menos um cenário.');
+      if (mec.origem === 'embutido' && !l.embutidoAtivo) add('aviso', 'mecanismo.origem', 'Mecanismo de Alavancagem: lance embutido desativado; a origem usada é o sorteio.');
     }
-    if (rc.embutidoTipo === 'pct' && isNum(num(rc.embutidoValor)) && num(rc.embutidoValor) > 100) add('erro', 'recursos.embutidoValor', 'Percentual inválido no lance embutido.');
-    if ((rc.fgtsEmFixo || rc.fgtsEmLivre) && !rc.fgtsPermitido && isNum(num(rc.fgtsUsar)) && num(rc.fgtsUsar) > 0) add('alerta', 'recursos.fgtsPermitido', 'FGTS informado sem confirmação de que o uso é permitido: não será considerado.');
-    if ((rc.embutidoEmFixo || rc.embutidoEmLivre) && rc.embutidoTratamento === 'definir') add('alerta', 'recursos.embutidoTratamento', MSG.embutidoSemRegra);
-    if (rc.baseCalculo === 'definir' && (rc.embutidoTipo === 'pct' || s.contemplacao.livre.tipo === 'pct' || s.contemplacao.cenarioB === 'fixo')) add('alerta', 'recursos.baseCalculo', 'Base de cálculo dos percentuais de lance: regra a definir.');
-
-    // Contemplação
-    const ct = s.contemplacao;
-    for (const [k, rot] of [['sorteio', 'sorteio'], ['fixo', 'lance fixo'], ['livre', 'lance livre']]) {
-      const m = num(ct[k].mes);
-      if (isNum(m) && (m < 1 || (isNum(N) && m > N) || !Number.isInteger(m))) add('erro', 'contemplacao.' + k + '.mes', 'Mês hipotético de contemplação (' + rot + ') fora do prazo.');
-    }
-    if (ct.cenarioB === 'fixo' && !isNum(num(ct.fixo.pct))) add('alerta', 'contemplacao.fixo.pct', 'Regra do lance fixo a definir (percentual do grupo).');
-    if (isNum(num(ct.fixo.pct)) && (num(ct.fixo.pct) < 0 || num(ct.fixo.pct) > 100)) add('erro', 'contemplacao.fixo.pct', 'Percentual inválido no lance fixo.');
-    if (ct.livre.tipo === 'pct' && isNum(num(ct.livre.valor)) && (num(ct.livre.valor) < 0 || num(ct.livre.valor) > 100)) add('erro', 'contemplacao.livre.valor', 'Percentual inválido no lance livre.');
-
-    // Venda
-    const vd = s.venda;
-    if (vd.ativa) {
-      if ((vd.base === 'valor' && !isNum(num(vd.valor))) || (vd.base !== 'valor' && !isNum(num(vd.pct)))) add('erro', 'venda.pct', 'Venda simulada sem premissa de preço.');
-      if (!isNum(num(vd.comissaoPct)) && !isNum(num(vd.custosFixos))) add('alerta', 'venda.comissaoPct', 'Venda simulada sem premissa de custos (informe 0 se não houver).');
-      if (isNum(num(vd.comissaoPct)) && (num(vd.comissaoPct) < 0 || num(vd.comissaoPct) > 100)) add('erro', 'venda.comissaoPct', 'Percentual inválido nos custos de venda.');
-    }
-
-    // Horizonte
-    if (s.horizonte.tipo === 'mes') {
-      const hm = num(s.horizonte.mes);
-      if (!isNum(hm) || hm < 1 || (isNum(N) && hm > N)) add('erro', 'horizonte.mes', 'Horizonte da projeção: informe um mês entre 1 e o prazo.');
+    if (l.fgtsAtivo && !isNum(num(l.fgtsValor))) add('erro', 'lances.fgtsValor', 'FGTS ativado: informe o valor disponível.');
+    if (l.embutidoAtivo) pctOk('embutidoPct', 'Lance embutido');
+    if (l.fixoAtivo) pctOk('fixoPct', 'Lance fixo');
+    if (l.livreAtivo) pctOk('livrePct', 'Lance livre');
+    if ((l.fixoAtivo && l.fixoUsarEmbutido) || (l.livreAtivo && l.livreUsarEmbutido)) {
+      if (!l.embutidoAtivo) add('alerta', 'lances.embutidoAtivo', '"Usar embutido" marcado, mas o lance embutido está desativado: o embutido não será considerado.');
     }
     return a;
   }
 
   // ---------------------------------------------------------------------------
-  // Regras pendentes e premissas (listas para exibição)
+  // Premissas e pontos a confirmar
   // ---------------------------------------------------------------------------
-
-  function regrasPendentes(s) {
-    const l = [];
-    const rc = s.recursos;
-    if (s.parcela.modalidade !== 'integral' && s.parcela.recomposicao === 'definir') l.push('Recomposição do saldo/parcelas após o redutor');
-    if (s.reajuste.credito.indice === 'definir') l.push('Índice de reajuste do crédito');
-    if (s.reajuste.parcela.indice === 'definir') l.push('Índice de reajuste da parcela');
-    if (s.plano.seguroAtivo && s.plano.seguroTipo === 'definir') l.push('Forma de cobrança do seguro');
-    (s.plano.outrosCustos || []).forEach((oc) => { if ((oc.desc || isNum(num(oc.valor))) && oc.tipo === 'definir') l.push('Forma de cobrança do custo "' + (oc.desc || 'sem descrição') + '"'); });
-    if (rc.baseCalculo === 'definir') l.push('Base de cálculo dos percentuais de lance (crédito contratado ou atualizado)');
-    if (rc.embutidoTratamento === 'definir') l.push('Tratamento do lance embutido no crédito');
-    if (!isNum(num(rc.embutidoLimitePct))) l.push('Limite máximo do lance embutido no grupo');
-    if (!isNum(num(rc.lanceLimitePct))) l.push('Limite máximo do lance no grupo (se houver)');
-    if (!isNum(num(s.contemplacao.fixo.pct))) l.push('Percentual do lance fixo do grupo');
-    if (s.contemplacao.abatimento === 'definir') l.push('Forma de amortização do saldo devedor pelo lance');
-    if (!rc.fgtsPermitido) l.push('Permissão e condições de uso do FGTS');
-    l.push('Periodicidade e data-base do reajuste (premissa configurável: confirmar com a administradora)');
-    l.push('Transferência de obrigações futuras em caso de venda da carta');
-    return l;
-  }
 
   function premissas(s) {
+    const p = s.plano;
+    const t = taxaIndice(p);
     const l = [];
-    const rj = s.reajuste;
-    const ptx = (c) => { const t = taxaIndice(c); return isNum(t) ? fmtPct(t) + ' por reajuste' : 'taxa não informada'; };
-    l.push('Parcela = [(Crédito ÷ Prazo) × (1 − Redutor)] + (Taxa de administração total ÷ Prazo) + (Fundo de reserva total ÷ Prazo).');
-    l.push('Reajuste do crédito: ' + nomeIndice(rj.credito) + (rj.credito.indice !== 'definir' ? ' — ' + ptx(rj.credito) : '') + '.');
-    l.push('Reajuste da parcela: ' + nomeIndice(rj.parcela) + (rj.parcela.indice !== 'definir' ? ' — ' + ptx(rj.parcela) : '') + '. Parcelas recalculadas sobre o crédito de referência reajustado (fundo comum, taxa de administração e fundo de reserva).');
-    l.push('Reajuste a cada ' + (num(rj.periodicidade) || '—') + ' meses, a partir do mês ' + (num(rj.primeiroMes) || '—') + '.');
-    if (s.parcela.modalidade !== 'integral') {
-      const rec = { definir: 'regra a definir', diluir: 'diluição do percentual não pago nas parcelas restantes após o redutor', manual: 'valor de parcela informado manualmente' }[s.parcela.recomposicao];
-      l.push('Redutor de ' + fmtPct(redutorPct(s.parcela), 0) + ' do mês ' + (s.parcela.redIni || 1) + ' ao mês ' + (s.parcela.redFim || '—') + (s.parcela.encerrarNaContemplacao ? ' (ou até a contemplação, se anterior)' : '') + '; recomposição: ' + rec + '.');
-    }
-    l.push('A parcela do mês da contemplação é considerada paga no total aportado até a contemplação.');
-    l.push('O lance embutido não é tratado como aporte do participante: é descontado do crédito conforme a regra configurada.');
-    l.push('FGTS: ' + (s.resultado.fgtsTratamento === 'deduzir' ? 'deduzido do resultado como patrimônio do participante' : 'apresentado apenas como informação, sem dedução no resultado') + '.');
-    if (s.contemplacao.sorteio.premissa) l.push('Mês hipotético de sorteio: ' + s.contemplacao.sorteio.premissa);
-    const mb = s.contemplacao[s.contemplacao.cenarioB];
-    if (mb.premissa) l.push('Mês hipotético de lance: ' + mb.premissa);
-    if (s.venda.ativa) l.push('Venda da carta: hipótese informada pelo consultor, sem garantia de liquidez ou preço. ' + (s.venda.obs || ''));
+    l.push('Parcela = [(Crédito ÷ Prazo) × (1 − Redutor)] + (Taxa de administração ÷ Prazo) + (Fundo de reserva ÷ Prazo), com taxa de administração e fundo de reserva em % do crédito.');
+    l.push('Reajuste anual pelo índice ' + nomeIndice(p) + (isNum(t) ? ' (' + fmtPct(t) + ' ao ano' + (indiceEstimado(p) ? ', taxa estimada' : '') + ')' : ' (taxa não informada)') + ', a cada 12 meses (meses 13, 25, 37...) até o fim do plano. O reajuste incide sobre o crédito e as parcelas são recalculadas sobre o crédito reajustado.');
+    if (s.parcela.modalidade !== 'integral') l.push('Redutor de ' + fmtPct(redutorPct(s.parcela), 0) + ' aplicado da 1ª parcela até a contemplação. Depois, a diferença não paga é diluída nas parcelas restantes.');
+    if (p.adesaoAtiva) l.push('Adesão de ' + fmtPct(num(p.adesaoPct)) + ' do crédito contratado, diluída em ' + (p.adesaoMeses || '—') + ' parcela(s) iguais, sem reajuste.');
+    if (p.seguroAtivo) l.push('Seguro prestamista de ' + fmtPct(num(p.seguroPct), 3) + ' ao mês sobre o crédito atualizado, somado à parcela.');
+    l.push('Lance abatido por ' + (p.abatimento === 'prazo' ? 'redução do prazo (quita parcelas a partir do fim do plano)' : 'redução proporcional do valor das parcelas restantes') + ', a valores do mês da contemplação.');
+    l.push('Percentuais de lance calculados sobre o crédito atualizado no mês da contemplação. Recursos próprios = lance total − lance embutido.');
+    l.push('Contemplação projetada no mês ' + (p.mesContemplacao || '—') + '. A parcela desse mês é considerada paga.');
+    l.push('Venda da carta contemplada: ' + REGRAS.vendaPct + '% sobre o crédito líquido disponível (hipótese fixa, sem garantia de venda). Resultado = valor de venda − total aportado (parcelas pagas + recursos próprios do lance).');
+    return l;
+  }
+
+  function pontosConfirmar(s) {
+    const p = s.plano;
+    const l = [];
+    if (indiceEstimado(p)) l.push('Taxa projetada do índice ' + nomeIndice(p) + ' (estimativa informada pelo consultor)');
+    l.push('Percentuais de taxa de administração, fundo de reserva, adesão e seguro praticados pela administradora' + (p.administradora ? ' ' + p.administradora : ''));
+    l.push('Percentual máximo de lance embutido e percentual do lance fixo do grupo');
+    l.push('Forma de recomposição do redutor e de amortização do lance adotada pela administradora');
+    l.push('Transferência da carta e das parcelas restantes em caso de venda');
     return l;
   }
 
   // ---------------------------------------------------------------------------
-  // Resumo, projeção anual e horizonte
+  // Resumo
   // ---------------------------------------------------------------------------
 
-  function horizonte(s, cenA, cenB) {
-    const N = num(s.plano.prazo);
-    const h = s.horizonte;
-    if (h.tipo === 'mes') return { ate: num(h.mes), mesC: null, rotulo: 'até o mês ' + (h.mes || '—') };
-    if (h.tipo === 'sorteio') return { ate: num(s.contemplacao.sorteio.mes), mesC: num(s.contemplacao.sorteio.mes), rotulo: 'até o mês hipotético de contemplação por sorteio' };
-    if (h.tipo === 'lance') { const m = num(s.contemplacao[s.contemplacao.cenarioB].mes); return { ate: m, mesC: m, rotulo: 'até o mês hipotético de contemplação por lance' }; }
-    return { ate: N, mesC: null, rotulo: 'prazo total do plano' };
+  function parcelaDataBase(s, redutor) {
+    const b = basicos(s);
+    if (!isNum(b.C) || !isNum(b.N) || !isNum(b.ta) || !isNum(b.fr) || b.N < 1) return null;
+    const k = 1 - redutor / 100;
+    const kTaxas = redutorNaParcelaToda(s.plano) ? k : 1;
+    return (1 / b.N) * b.C * k + ((b.ta / 100) / b.N) * b.C * kTaxas + ((b.fr / 100) / b.N) * b.C * kTaxas;
   }
 
-  function projecaoAnual(s, linhas) {
-    const C = num(s.plano.credito);
-    const anos = [];
-    let acum = 0, acumOk = true;
-    for (let i = 0; i < linhas.length; i += 12) {
-      const bloco = linhas.slice(i, i + 12);
-      const ult = bloco[bloco.length - 1];
-      const parc = bloco.map((l) => l.parcelaTotal);
-      const ok = parc.every(isNum) && bloco.every((l) => isNum(l.totalMes));
-      const total = ok ? bloco.reduce((a, l) => a + l.totalMes, 0) : null;
-      if (!ok) acumOk = false;
-      if (acumOk) acum += total;
-      anos.push({
-        ano: i / 12 + 1,
-        meses: bloco[0].m + '–' + ult.m,
-        credito: ult.credAtual,
-        parcMin: parc.every(isNum) ? Math.min(...parc) : null,
-        parcMax: parc.every(isNum) ? Math.max(...parc) : null,
-        total,
-        acum: acumOk ? acum : null,
-        pctCredito: acumOk && isNum(C) && C > 0 ? (acum / C) * 100 : null
+  function resumo(s, nSorteio) {
+    const p = s.plano;
+    const b = basicos(s);
+    const R = {};
+    const C = b.C, N = b.N;
+    R.credito = isNum(C) ? V(C, 'informado', 'Valor do crédito', 'Informado pelo consultor') : P('Crédito não informado');
+    R.prazo = isNum(N) ? V(N, 'informado', 'Prazo total em meses', 'Informado pelo consultor') : P('Prazo não informado');
+    R.taxaAdm = isNum(b.ta) && isNum(C) ? V((b.ta / 100) * C, 'calculado', 'Taxa adm. total = ' + fmtPct(b.ta) + ' × ' + fmtBRL(C), 'Percentual informado', { pct: b.ta }) : P('Taxa de administração ou crédito não informados');
+    R.taxaAno = isNum(b.ta) && isNum(b.fr) && isNum(N) && N > 0 ? V((b.ta + b.fr) / (N / 12), 'calculado', 'Total de taxas ao ano = (taxa de administração ' + fmtPct(b.ta) + ' + fundo de reserva ' + fmtPct(b.fr) + ') ÷ (' + N + ' meses ÷ 12)', 'Taxas diluídas pelos anos do plano') : P('Taxa de administração, fundo de reserva ou prazo não informados');
+    R.fundoReserva = isNum(b.fr) && isNum(C) ? V((b.fr / 100) * C, 'calculado', 'Fundo de reserva total = ' + fmtPct(b.fr) + ' × ' + fmtBRL(C), 'Percentual informado', { pct: b.fr }) : P('Fundo de reserva ou crédito não informados');
+    if (p.adesaoAtiva) {
+      const ap = num(p.adesaoPct), am = num(p.adesaoMeses);
+      R.adesao = isNum(ap) && isNum(am) && isNum(C) && am >= 1 ? V((ap / 100) * C, 'calculado', 'Adesão = ' + fmtPct(ap) + ' × ' + fmtBRL(C) + ', em ' + am + ' parcela(s) de ' + fmtBRL((ap / 100) * C / am), 'Percentual informado', { mensal: (ap / 100) * C / am }) : P('Adesão: percentual ou meses não informados');
+    } else R.adesao = V(null, 'na', 'Sem taxa de adesão', '', { nota: 'Sem adesão' });
+
+    const r = redutorPct(s.parcela);
+    const pInt = parcelaDataBase(s, 0);
+    R.parcelaIntegral = isNum(pInt)
+      ? V(pInt, 'calculado', 'Parcela integral = (' + fmtBRL(C) + ' ÷ ' + N + ') + (' + fmtBRL(R.taxaAdm.v) + ' ÷ ' + N + ') + (' + fmtBRL(R.fundoReserva.v) + ' ÷ ' + N + ')', 'Fórmula da parcela; sem adesão, seguro e reajuste')
+      : P(b.pend, 'Parcela integral');
+    if (s.parcela.modalidade !== 'integral') {
+      const pr = isNum(r) ? parcelaDataBase(s, r) : null;
+      R.parcelaRedutor = isNum(pr)
+        ? V(pr, 'calculado', redutorNaParcelaToda(p)
+          ? 'Parcela com redutor (HS) = [(' + fmtBRL(C) + ' ÷ ' + N + ') + (' + fmtBRL(R.taxaAdm.v) + ' ÷ ' + N + ') + (' + fmtBRL(R.fundoReserva.v) + ' ÷ ' + N + ')] × (1 − ' + fmtPct(r, 0) + ')'
+          : 'Parcela com redutor = (' + fmtBRL(C) + ' ÷ ' + N + ') × (1 − ' + fmtPct(r, 0) + ') + (' + fmtBRL(R.taxaAdm.v) + ' ÷ ' + N + ') + (' + fmtBRL(R.fundoReserva.v) + ' ÷ ' + N + ')', 'Fórmula da parcela; sem adesão, seguro e reajuste')
+        : P(b.pend, 'Parcela com redutor');
+    }
+    const l1 = nSorteio.ok ? nSorteio.linhas[0] : null;
+    R.parcelaInicial = l1 && isNum(l1.total)
+      ? V(l1.total, 'calculado', 'Parcela do mês 1 = Fundo comum ' + fmtBRL(l1.fundoComum) + ' + Taxa adm. ' + fmtBRL(l1.taxa) + ' + Fundo de reserva ' + fmtBRL(l1.fundo) + ' + Adesão ' + fmtBRL(l1.adesao) + ' + Seguro ' + fmtBRL(l1.seguro), 'Demonstrativo mensal')
+      : P(nSorteio.pend, 'Parcela do mês 1');
+    R.seguro = !p.seguroAtivo ? V(null, 'na', 'Seguro prestamista não contratado', '', { nota: 'Não contratado' })
+      : l1 && isNum(l1.seguro) ? V(l1.seguro, 'calculado', 'Seguro = ' + fmtPct(num(p.seguroPct), 3) + ' × crédito ' + fmtBRL(l1.credAtual), 'Percentual informado') : P('Seguro prestamista: percentual não informado');
+    R.totalPago = nSorteio.ok && isNum(nSorteio.totalPlano)
+      ? V(nSorteio.totalPlano, 'estimado', 'Σ parcelas dos meses 1 a ' + N + ' (cenário sem lance, contemplação no mês ' + nSorteio.mesC + ')', 'Demonstrativo mensal', { nota: MSG.estimado })
+      : P(nSorteio.pend, 'Σ parcelas do plano');
+    return R;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Projeções (dados dos gráficos)
+  // ---------------------------------------------------------------------------
+
+  function modsAtivas(s) {
+    const l = ['sorteio'];
+    if (s.lances.embutidoAtivo) l.push('embutido');
+    if (s.lances.fixoAtivo) l.push('fixo');
+    if (s.lances.livreAtivo) l.push('livre');
+    return l;
+  }
+
+  function projecoes(s, nucleos) {
+    const out = {};
+    const b = basicos(s);
+    if (!b.ok) return out;
+    const pr = s.projecoes;
+    const mods = modsAtivas(s);
+    if (pr.parcelas) {
+      out.parcelas = mods.map((mod) => ({ mod, nome: NOMES_MOD[mod], pontos: nucleos[mod].ok ? nucleos[mod].linhas.map((l) => ({ x: l.m, y: l.encerrado ? null : l.total })) : [] }));
+    }
+    if (pr.credito) {
+      const pts = [];
+      for (let ano = 1; ano <= Math.ceil(b.N / 12); ano++) {
+        const m = (ano - 1) * 12 + 1;
+        const f = fator(s.plano, m);
+        pts.push({ x: ano, rotulo: 'Ano ' + ano, y: isNum(f) ? b.C * f : null });
+      }
+      out.credito = pts;
+    }
+    if (pr.rentabilidade) {
+      out.rentabilidade = mods.map((mod) => {
+        const pts = [];
+        for (let m = 1; m <= b.N; m++) { const n = nucleo(s, mod, m); pts.push({ x: m, y: n.ok ? n.resultado : null, pct: n.ok ? n.rentabilidade : null }); }
+        return { mod, nome: NOMES_MOD[mod], pontos: pts };
       });
     }
-    return anos;
+    return out;
   }
 
-  function resumo(s, crBase, hz) {
-    const C = num(s.plano.credito), N = num(s.plano.prazo);
-    const R = {};
-    const l1 = crBase.linhas[0];
-    const r = redutorPct(s.parcela);
-    const temRed = s.parcela.modalidade !== 'integral';
-    const fr = num(s.plano.frValor), ta = num(s.plano.taxaAdm);
+  // ---------------------------------------------------------------------------
+  // Simulação de aquisição: CET do uso da carta para comprar o bem
+  // ---------------------------------------------------------------------------
 
-    R.credito = isNum(C) ? V(C, 'informado', 'Valor do crédito desejado', 'Informado pelo consultor') : P('Crédito não informado');
-    R.prazo = isNum(N) ? V(N, 'informado', 'Prazo total em meses', 'Informado pelo consultor') : P('Prazo não informado');
-    R.taxaAdm = isNum(ta) && isNum(C) ? V(ta / 100 * C, 'calculado', 'Taxa adm. total = ' + fmtPct(ta) + ' × ' + fmtBRL(C), 'Percentual informado; incidência sobre o crédito conforme fórmula da parcela', { pct: ta }) : P('Taxa de administração ou crédito não informados');
-    R.fundoReserva = isNum(fr) && isNum(C)
-      ? (s.plano.frTipo === 'valor' ? V(fr, 'informado', 'Fundo de reserva total informado em R$', 'Consultor', { pct: C > 0 ? fr / C * 100 : null }) : V(fr / 100 * C, 'calculado', 'Fundo de reserva total = ' + fmtPct(fr) + ' × ' + fmtBRL(C), 'Percentual informado', { pct: fr }))
-      : P('Fundo de reserva ou crédito não informados');
+  /** Valor presente dos fluxos (índice 1 = mês 1) a uma taxa mensal. */
+  function vpl(fluxos, i) {
+    let v = 0;
+    for (let t = 1; t < fluxos.length; t++) v += fluxos[t] / Math.pow(1 + i, t);
+    return v;
+  }
 
-    const pInt = parcelaFormula(s, 0);
-    R.parcelaIntegral = isNum(pInt)
-      ? V(pInt, 'calculado', 'Parcela integral = (' + fmtBRL(C) + ' ÷ ' + N + ') + (' + fmtBRL(R.taxaAdm.v) + ' ÷ ' + N + ') + (' + fmtBRL(R.fundoReserva.v) + ' ÷ ' + N + ')', 'Fórmula informada; valores na data-base, sem seguro e sem reajuste')
-      : P('Crédito, prazo, taxa de administração e fundo de reserva são necessários');
-    if (temRed) {
-      const pRed = isNum(r) ? parcelaFormula(s, r) : null;
-      R.parcelaRedutor = isNum(pRed)
-        ? V(pRed, 'calculado', 'Parcela com redutor = (' + fmtBRL(C) + ' ÷ ' + N + ') × (1 − ' + fmtPct(r, 0) + ') + (' + fmtBRL(R.taxaAdm.v) + ' ÷ ' + N + ') + (' + fmtBRL(R.fundoReserva.v) + ' ÷ ' + N + ')', 'Fórmula informada; data-base, sem seguro')
-        : P('Percentual do redutor e dados do plano são necessários');
-      const pos = crBase.linhas.find((l) => l.posRed);
-      if (!pos) R.parcelaPosRedutor = isNum(num(s.parcela.redFim)) ? V(null, 'na', 'Sem meses após o redutor no prazo', '') : P('Período do redutor não informado');
-      else if (isNum(pos.parcela)) R.parcelaPosRedutor = V(pos.parcela / (pos.fp || 1), 'calculado', s.parcela.recomposicao === 'diluir'
-        ? 'Parcela após o redutor = Crédito × [1/Prazo + Redutor × meses com redutor ÷ (Prazo × meses restantes)] + Taxa adm./Prazo + Fundo de reserva/Prazo (valores na data-base)'
-        : 'Valor informado manualmente pelo consultor (data-base)', 'Regra de recomposição configurada; ' + pos.rotulo + ' em diante')
-      else R.parcelaPosRedutor = P(pos.pend, 'Depende da regra de recomposição');
+  /**
+   * Taxa interna de retorno mensal do ponto de vista do cliente que usa o crédito.
+   * Procura a menor taxa positiva em que o VPL muda de sinal e refina por bissecção.
+   */
+  function tirMensal(fluxos) {
+    let a = 0, fa = vpl(fluxos, 0);
+    if (Math.abs(fa) < 1e-6) return 0;
+    for (let i = 0.0005; i <= 0.2 + 1e-12; i += 0.0005) {
+      const fi = vpl(fluxos, i);
+      if ((fa < 0 && fi >= 0) || (fa > 0 && fi <= 0)) {
+        let lo = a, hi = i, flo = fa;
+        for (let k = 0; k < 80; k++) {
+          const mid = (lo + hi) / 2, fm = vpl(fluxos, mid);
+          if ((flo < 0 && fm < 0) || (flo > 0 && fm > 0)) { lo = mid; flo = fm; } else hi = mid;
+        }
+        return (lo + hi) / 2;
+      }
+      a = i; fa = fi;
     }
+    return null;
+  }
 
-    R.parcelaInicial = l1 && isNum(l1.parcelaTotal)
-      ? V(l1.parcelaTotal, 'calculado', 'Parcela do mês 1 = Fundo comum ' + fmtBRL(l1.fundoComum) + ' + Taxa adm. ' + fmtBRL(l1.taxa) + ' + Fundo de reserva ' + fmtBRL(l1.fundo) + ' + Seguro ' + fmtBRL(l1.seguro), 'Demonstrativo mensal (mês 1)')
-      : P(l1 ? l1.pend : ['Dados do plano incompletos'], 'Parcela do mês 1');
+  /**
+   * Aquisição do bem com a carta: o cliente paga todas as parcelas (com reajustes até o fim do plano)
+   * e os recursos próprios do lance, e recebe o crédito disponível no mês da contemplação.
+   */
+  function aquisicao(s, mod) {
+    const n = nucleo(s, mod);
+    const out = { mod, nome: NOMES_MOD[mod], ok: false, pend: n.pend };
+    if (!n.ok || !isNum(n.totalPlano) || !isNum(n.credLiquido) || !isNum(n.proprios)) return out;
+    const fluxos = [0];
+    n.linhas.forEach((l) => fluxos.push(-(l.total || 0)));
+    fluxos[n.mesC] += n.credLiquido - n.proprios;
+    const i = tirMensal(fluxos);
+    out.ok = true;
+    out.mesC = n.mesC;
+    out.credito = n.credLiquido;
+    out.proprios = n.proprios;
+    out.fgts = n.fgts;
+    out.totalParcelas = n.totalPlano;
+    out.prazoEfetivo = n.mesC + n.prazoRestante;
+    out.desembolso = n.totalPlano + n.proprios;
+    out.custo = out.desembolso - n.credLiquido;
+    out.custoPct = n.credLiquido > 0 ? (out.custo / n.credLiquido) * 100 : null;
+    out.parcelaPos = n.parcelaPosAtual;
+    out.locacao = (REGRAS.locacaoPct / 100) * n.credLiquido;
+    out.cetMes = isNum(i) ? i * 100 : null;
+    out.cetAno = isNum(i) ? (Math.pow(1 + i, 12) - 1) * 100 : null;
+    return out;
+  }
 
-    const s1 = l1 ? l1.seguro : null;
-    R.seguro = !s.plano.seguroAtivo ? V(0, 'informado', 'Seguro não contratado na simulação', 'Consultor')
-      : isNum(s1) ? V(s1, s.plano.seguroTipo === 'fixo' ? 'informado' : 'calculado', s.plano.seguroTipo === 'fixo' ? 'Seguro mensal = valor fixo informado' : 'Seguro mensal = ' + fmtPct(num(s.plano.seguroValor)) + ' × crédito atualizado', 'Regra configurada pelo consultor')
-      : P(l1 ? l1.pend.filter((x) => /Seguro/.test(x)) : [], 'Seguro');
+  // ---------------------------------------------------------------------------
+  // Lance Fidelidade: contemplação a partir da parcela da opção, lance 100% embutido
+  // ---------------------------------------------------------------------------
 
-    const ate = hz.ate;
-    if (!isNum(ate) || ate < 1 || !isNum(N) || ate > N) R.totalPago = P('Horizonte da projeção não definido ou inválido (' + hz.rotulo + ')');
-    else {
-      const sm = somar(crBase.linhas, 1, ate, 'totalMes');
-      R.totalPago = sm.v === null ? P(sm.pend, 'Σ (parcela + seguro + outros custos) meses 1..' + ate)
-        : V(sm.v, 'estimado', 'Σ (parcela + seguro + outros custos) dos meses 1 a ' + ate + ' (' + hz.rotulo + ')', 'Demonstrativo mensal', { nota: MSG.estimado });
-    }
-    const so = isNum(ate) && ate >= 1 && isNum(N) && ate <= N ? somar(crBase.linhas, 1, ate, 'outros') : { v: null, pend: [] };
-    R.outrosCustos = so.v === null ? P(so.pend.length ? so.pend : ['Horizonte inválido'], 'Σ outros custos') : V(so.v, 'estimado', 'Σ outros custos dos meses 1 a ' + ate, 'Outros custos configurados');
-    return R;
+  function fidelidade(s) {
+    const f = s.fidelidade;
+    if (!f || !f.ativo) return [];
+    return [1, 2, 3].map((i) => {
+      const parcela = num(f['p' + i + 'Parcela']);
+      const pct = num(f['p' + i + 'Pct']);
+      return { i, nome: 'Fidelidade ' + i, parcela, pct, nucleo: nucleo(s, 'fidelidade', parcela, pct) };
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Mecanismo de Alavancagem: a venda (ou o lucro) da carta no mês da projeção de contemplação
+  // é reaplicada em novas cartas com as mesmas características do plano; cada nova carta é
+  // contemplada e vendida no mês informado.
+  // ---------------------------------------------------------------------------
+
+  function mecanismo(s) {
+    const m = s.mecanismo;
+    if (!m || !m.ativo) return null;
+    const origem = m.origem === 'embutido' && s.lances.embutidoAtivo ? 'embutido' : 'sorteio';
+    const base = m.base === 'lucro' ? 'lucro' : 'venda';
+    const out = { ok: false, base, origem, nomeOrigem: NOMES_MOD[origem], pend: [], cenarios: [] };
+    const n0 = nucleo(s, origem);
+    if (!n0.ok) { out.pend = n0.pend; return out; }
+    out.mesOrigem = n0.mesC;
+    out.vendaOrigem = n0.venda;
+    out.lucroOrigem = n0.resultado;
+    const bruto = base === 'lucro' ? n0.resultado : n0.venda;
+    out.capital = isNum(bruto) ? Math.max(0, bruto) : null;
+    const b = basicos(s);
+    const m2 = num(m.mesNovas);
+    if (!isNum(m2) || !Number.isInteger(m2) || m2 < 1 || m2 > b.N) { out.pend.push('Mês de contemplação das novas cartas inválido'); return out; }
+    const nova = nucleo(s, 'sorteio', m2);
+    if (!nova.ok || !isNum(out.capital)) { out.pend = out.pend.concat(nova.pend); return out; }
+    out.ok = true;
+    out.mesNovas = m2;
+    out.carta = { credito: nova.credBruto, credLiquido: nova.credLiquido, parcela: nova.linhas[0].total, aporte: nova.totalAportado, venda: nova.venda };
+    [1, 2, 3, 4].forEach((i) => {
+      const q = num(m['q' + i]);
+      if (!isNum(q) || q < 1 || !Number.isInteger(q)) return;
+      const aporte = q * nova.totalAportado;
+      const coberto = Math.min(out.capital, aporte);
+      // Meses de parcelas pagos só com o capital
+      let acum = 0, meses = 0;
+      for (let k = 0; k < m2; k++) { const p = q * (nova.linhas[k].total || 0); if (acum + p > out.capital + 1e-6) break; acum += p; meses++; }
+      const venda = q * nova.venda;
+      out.cenarios.push({
+        i, q,
+        credito: q * nova.credBruto,
+        parcelaInicial: q * nova.linhas[0].total,
+        aporte,
+        coberto,
+        adicional: aporte - coberto,
+        sobra: out.capital - coberto,
+        mesesCobertos: meses,
+        venda,
+        lucro: venda - aporte,
+        // patrimônio ao fim: venda das novas cartas + capital que sobrou
+        patrimonio: venda + (out.capital - coberto)
+      });
+    });
+    return out;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Simulação de alavancagem: contemplação e venda em meses sucessivos
+  // ---------------------------------------------------------------------------
+
+  // Meses 1 a 12 um a um; depois de 6 em 6 até o mês 48
+  const MESES_ALAVANCAGEM = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 18, 24, 30, 36, 42, 48];
+
+  function alavancagem(s) {
+    const b = basicos(s);
+    if (!b.ok) return [];
+    const mods = ['sorteio'];
+    if (s.lances.embutidoAtivo) mods.push('embutido');
+    const meses = MESES_ALAVANCAGEM.filter((m) => m <= b.N);
+    return mods.map((mod) => ({
+      mod,
+      nome: NOMES_MOD[mod],
+      linhas: meses.map((m) => {
+        const n = nucleo(s, mod, m);
+        // Rentabilidade ao mês: taxa mensal equivalente do resultado no prazo da linha
+        const rentMes = isNum(n.venda) && isNum(n.totalAportado) && n.totalAportado > 0 && n.venda > 0 ? (Math.pow(n.venda / n.totalAportado, 1 / m) - 1) * 100 : null;
+        return { m, credito: n.credLiquido, parcela: n.parcelaMes, aporte: n.totalAportado, venda: n.venda, lucro: n.resultado, rentabilidade: rentMes, rentabilidadeTotal: n.rentabilidade };
+      })
+    }));
   }
 
   // ---------------------------------------------------------------------------
@@ -853,30 +862,39 @@
 
   function simular(s) {
     const validacoes = validar(s);
-    const cenA = cenario(s, 'sorteio');
-    const cenB = cenario(s, 'lance');
-    const hz = horizonte(s, cenA, cenB);
-    const crBase = cronograma(s, hz.mesC);
-    const res = resumo(s, crBase, hz);
-    const alertas = validacoes.concat(cenA.alertas.map((x) => Object.assign({ campo: 'cenarioA' }, x)), cenB.alertas.map((x) => Object.assign({ campo: 'cenarioB' }, x)));
+    const mods = modsAtivas(s);
+    const cenarios = mods.map((m) => cenario(s, m));
+    const nucleos = {};
+    cenarios.forEach((c) => { nucleos[c.mod] = c.nucleo; });
+    cenarios.forEach((c) => c.alertas.forEach((x) => validacoes.push(Object.assign({ campo: 'lances' }, x))));
+    const b = basicos(s);
+    const baseLance = nucleos.sorteio && nucleos.sorteio.ok ? nucleos.sorteio.credBruto : null;
+    const fid = fidelidade(s);
+    const mec = mecanismo(s);
+    const valor = (pct) => (isNum(baseLance) && isNum(num(pct)) ? (num(pct) / 100) * baseLance : null);
     return {
-      validacoes: alertas,
-      resumo: res,
-      horizonte: hz,
-      cronograma: crBase,
-      anual: projecaoAnual(s, crBase.linhas),
-      cenarioA: cenA,
-      cenarioB: cenB,
-      pendentes: regrasPendentes(s),
+      validacoes,
+      resumo: resumo(s, nucleos.sorteio),
+      cenarios,
+      valoresLance: Object.assign({ embutido: valor(s.lances.embutidoPct), fixo: valor(s.lances.fixoPct), livre: valor(s.lances.livrePct), mecCapital: mec ? mec.capital : null },
+        ...fid.map((f) => ({ ['fid' + f.i]: f.nucleo.ok ? f.nucleo.embutido : null }))),
+      baseLance,
+      projecoes: projecoes(s, nucleos),
+      alavancagem: alavancagem(s),
+      fidelidade: fid,
+      mecanismo: mec,
+      aquisicao: ['sorteio'].concat(s.lances.embutidoAtivo ? ['embutido'] : []).map((m) => aquisicao(s, m)),
       premissas: premissas(s),
-      redutorPct: redutorPct(s.parcela)
+      pontosConfirmar: pontosConfirmar(s),
+      redutorPct: redutorPct(s.parcela),
+      prazo: b.N
     };
   }
 
   return {
-    INDICES, MODALIDADES_PARCELA, MSG,
-    estadoPadrao, simular, cronograma, cenario, calcularLance, validar, fatorReajuste, qtdReajustes,
-    parcelaFormula, redutorPct, somar, nomeIndice, taxaIndice, rotuloMes,
-    fmtBRL, fmtPct, fmtNum, num, isNum, r2
+    normalizarPlano, aplicarPlanoCadastrado, normalizarIndice, mecanismo, redutorNaParcelaToda, INDICES, CATEGORIAS, ADMINISTRADORAS, MODALIDADES_PARCELA, REGRAS, MSG, NOMES_MOD,
+    estadoPadrao, aplicarCategoria, simular, nucleo, aquisicao, tirMensal, vpl, cenario, validar, fator, qtdReajustes, parcelaDataBase, redutorPct,
+    nomeIndice, taxaIndice, indiceEstimado, lanceSobre,
+    fmtBRL, fmtPct, fmtNum, num, isNum
   };
 });
