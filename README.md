@@ -18,7 +18,7 @@ Na primeira abertura aparece um exemplo com valores fictícios. **Nova proposta*
 
 ## Identidade visual
 
-O simulador segue o manual de identidade do CRM Consórcios (v1.0): paleta azul-noite, tema escuro e claro (botão **Claro | Escuro** no topo da proposta), Famels/Manrope em títulos e números, Poppins nos textos, ícones de traço e o monograma provisório "CC". Os tokens oficiais ficam em `css/tokens.css`; para usar a Famels licenciada, coloque os arquivos em `css/fonts/` (sem eles, a Manrope assume automaticamente).
+O simulador segue o manual de identidade do CRM Consórcios (v1.0): paleta azul-noite, tema escuro e claro (botão **Claro | Escuro** no topo da proposta), Famels/Manrope em títulos e números, Poppins nos textos, ícones de traço e o logotipo da **Vero Consórcios** (versões para fundo claro e escuro em `img/`, embutidas em `js/logos.js`). Os tokens oficiais ficam em `css/tokens.css`; para usar a Famels licenciada, coloque os arquivos em `css/fonts/` (sem eles, a Manrope assume automaticamente).
 
 ## Estrutura
 

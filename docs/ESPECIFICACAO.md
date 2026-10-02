@@ -207,7 +207,7 @@ Cada cartão de lance lembra onde o lance é abatido (parcela ou prazo). No sort
   - Um botão principal por tela (névoa sólida no escuro, azul-noite no claro); ações secundárias em pílula de vidro.
   - Ícones de traço no estilo Lucide (1,7 px, nunca preenchidos).
   - Status com as cores dessaturadas da marca: sucesso para resultado positivo, perigo para negativo.
-- **Marca:** monograma provisório "CC" no topo do menu, até o logotipo definitivo. O PDF do cliente não leva a marca interna.
+- **Marca:** logotipo da **Vero Consórcios**, nome oficial da empresa. A versão com texto azul-noite é usada no tema claro e a versão com texto em névoa no tema escuro. Aparece no topo do menu, no topo da proposta na tela, no topo da página 1 do PDF e no rodapé de todas as páginas, sempre na versão escura no PDF. A mensagem do WhatsApp cita a *Vero Consórcios*. Os arquivos ficam em `img/vero-logo-claro.png` e `img/vero-logo-escuro.png`, embutidos em `js/logos.js`.
 - **Geração do PDF:** as páginas são montadas fora da tela em escala 2,5× e capturadas a 0,8×. Assim o html2canvas desenha o texto pequeno sem falhas de espaçamento e a resolução final continua a mesma (1588 × 2245 px por página).
 
 ## 3. Fórmulas

@@ -690,9 +690,14 @@
       '<div class="formas">' + r.aquisicao.map(cartaoAquisicao).join('') + '</div></section>';
   }
 
+  /** Logotipo da Vero Consórcios: versão para fundo escuro e para fundo claro (o CSS mostra a do tema atual). */
+  const LOGO = window.LOGO_VERO || {};
+  const logoPar = (cls) => '<img class="logo logo-escuro ' + cls + '" src="' + (LOGO.escuro || '') + '" alt="Vero Consórcios">' +
+    '<img class="logo logo-claro ' + cls + '" src="' + (LOGO.claro || '') + '" alt="Vero Consórcios">';
+
   function cabecalho(s, pdf) {
     const ident = [C.CATEGORIAS[s.plano.categoria].nome, s.plano.administradora].filter(Boolean).map(esc).join(' · ');
-    return '<header class="topo' + (pdf ? ' p-topo' : '') + '"><div class="topo-texto"><h1 class="titulo-proposta">Proposta de <span class="acento">Consórcio</span></h1>' +
+    return '<header class="topo' + (pdf ? ' p-topo' : '') + '"><div class="topo-texto">' + (pdf ? '' : '<div class="topo-logo">' + logoPar('') + '</div>') + '<h1 class="titulo-proposta">Proposta de <span class="acento">Consórcio</span></h1>' +
       '<p class="cliente">' + (s.plano.lead ? esc(s.plano.lead) : '<span class="mudo">Nome do cliente</span>') + '</p>' +
       '<p class="sub-topo">' + ident + (pdf ? ' · Emitida em ' + new Date().toLocaleDateString('pt-BR') : '') + '</p></div>' +
       (pdf ? '' : seletorTema()) + '</header>';
@@ -750,7 +755,7 @@
 
   function pdfPagina(n, total, s, corpo) {
     return '<section class="pdf-pagina"><div class="pdf-corpo">' + corpo + '</div>' +
-      '<footer class="pdf-rodape"><span>' + esc(s.plano.lead) + '</span><span>' + n + ' / ' + total + '</span></footer></section>';
+      '<footer class="pdf-rodape"><span>' + esc(s.plano.lead) + '</span>' + (LOGO.escuro ? '<img class="pdf-logo-rodape" src="' + LOGO.escuro + '" alt="Vero Consórcios">' : '') + '<span>' + n + ' / ' + total + '</span></footer></section>';
   }
 
   function pdfCartaoForma(n, mod, nome, sub) {
@@ -783,7 +788,7 @@
     // Página 1: dados da proposta, características e formas de contemplação
     const kpi = (rot, val, formato, cls, suf) => '<div class="pdf-kpi' + (cls ? ' ' + cls : '') + '"><span>' + rot + '</span><b>' + fmt(val, formato) + (suf && val && val.v != null ? '<small> ' + suf + '</small>' : '') + '</b></div>';
     const ident = [C.CATEGORIAS[p.categoria].nome, p.administradora].filter(Boolean).map(esc).join(' · ');
-    let p1 = '<header class="pdf-topo"><p class="eyebrow">Emitida em ' + data + '</p><h1>Proposta de <span class="acento">Consórcio</span></h1>' +
+    let p1 = '<header class="pdf-topo">' + (LOGO.escuro ? '<img class="pdf-logo" src="' + LOGO.escuro + '" alt="Vero Consórcios">' : '') + '<p class="eyebrow">Emitida em ' + data + '</p><h1>Proposta de <span class="acento">Consórcio</span></h1>' +
       '<p class="pdf-cliente">' + esc(p.lead) + '</p><p class="pdf-ident">' + ident + '</p></header>';
     p1 += '<div class="pdf-kpis">' + kpi('Crédito', R.credito, 'brl', 'destaque') + kpi('Parcela inicial', R.parcelaInicial, 'brl', 'destaque') + kpi('Total de taxas', R.taxaAno, 'pct', '', 'a.a.') + kpi('Prazo', R.prazo, 'meses') + '</div>';
     const carac = [
@@ -906,7 +911,7 @@
     const linhas = [
       'Olá, *' + primeiro + '*! Tudo bem?',
       '',
-      'Conforme conversamos, segue abaixo o PDF da proposta apresentada em reunião. Os destaques:',
+      'Conforme conversamos, segue abaixo o PDF da proposta da *Vero Consórcios* apresentada em reunião. Os destaques:',
       '',
       '🏷️ *Consórcio de ' + C.CATEGORIAS[p.categoria].nome + '*',
       '💰 Crédito: *' + v(R.credito.v) + '*',
@@ -1052,6 +1057,7 @@
     return false;
   };
   const comUrlCrm = !!(window.CONFIG_SIMULADOR || {}).planosUrl;
+  document.querySelectorAll('img[data-logo]').forEach((img) => { img.src = LOGO[img.dataset.logo] || ''; });
   preencherSelects();
   let planoAplicado = aplicarPlanoCrm(!comUrlCrm);
   ligarMenu();

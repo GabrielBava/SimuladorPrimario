@@ -21,6 +21,7 @@ const saida = [
   corpo,
   '<script>window.MODO_ARTIFACT = true;</script>',
   '<script>\n' + semEntidade(ler('js/config.js')) + '\n</script>',
+  '<script>\n' + semEntidade(ler('js/logos.js')) + '\n</script>',
   '<script>\n' + semEntidade(ler('js/calc.js')) + '\n</script>',
   '<script>\n' + semEntidade(ler('js/app.js')) + '\n</script>',
   ''
